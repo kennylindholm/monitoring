@@ -1,0 +1,10 @@
+---
+# Main site playbook - Entry point for all Ansible operations
+- import_playbook: playbooks/install-docker.yml
+  tags: docker
+
+# Additional playbooks can be added here as the project grows
+# - import_playbook: playbooks/monitoring.yml
+#   tags: monitoring
+# - import_playbook: playbooks/security.yml
+#   tags: security

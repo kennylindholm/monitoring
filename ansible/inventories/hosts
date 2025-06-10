@@ -1,0 +1,7 @@
+[debian_servers]
+# Replace with your actual server IP addresses or hostnames
+monitoring ansible_host=192.168.122.43 ansible_user=root
+
+[debian_servers:vars]
+ansible_ssh_private_key_file=~/.ssh/id_ed25519
+ansible_python_interpreter=/usr/bin/python3

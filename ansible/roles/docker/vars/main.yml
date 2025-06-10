@@ -1,0 +1,30 @@
+---
+# Docker role variables
+docker_users:
+  - "{{ ansible_user }}"
+  # Add additional users who should be in the docker group
+  # - username1
+  # - username2
+
+# Docker service configuration
+docker_service_state: started
+docker_service_enabled: yes
+
+# Docker daemon configuration (optional)
+docker_daemon_config: {}
+# Example:
+# docker_daemon_config:
+#   log-driver: "json-file"
+#   log-opts:
+#     max-size: "10m"
+#     max-file: "3"
+#   storage-driver: "overlay2"
+
+# Docker compose version (if needed for specific version)
+docker_compose_version: "latest"
+
+# Additional Docker packages (optional)
+docker_additional_packages: []
+# Example:
+# docker_additional_packages:
+#   - docker-scan-plugin

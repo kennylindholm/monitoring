@@ -23,6 +23,33 @@
     - alertmanager/data
     - configs
 
+- name: Fix Prometheus data directory permissions
+  file:
+    path: "{{ monitoring_stack_dir }}/prometheus/data"
+    state: directory
+    owner: "65534"
+    group: "65534"
+    mode: '0755'
+    recurse: yes
+
+- name: Fix Grafana data directory permissions
+  file:
+    path: "{{ monitoring_stack_dir }}/grafana/data"
+    state: directory
+    owner: "472"
+    group: "0"
+    mode: '0755'
+    recurse: yes
+
+- name: Fix Loki data directory permissions
+  file:
+    path: "{{ monitoring_stack_dir }}/loki/data"
+    state: directory
+    owner: "10001"
+    group: "10001"
+    mode: '0755'
+    recurse: yes
+
 - name: Copy Docker Compose file for monitoring stack
   template:
     src: docker-compose.yml.j2
@@ -32,14 +59,27 @@
     mode: '0644'
   notify: restart monitoring stack
 
-- name: Copy Prometheus configuration
+- name: Copy Prometheus configuration (simple version for debugging)
   template:
-    src: prometheus.yml.j2
+    src: prometheus-simple.yml.j2
     dest: "{{ monitoring_stack_dir }}/configs/prometheus.yml"
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: '0644'
   notify: restart monitoring stack
+  tags: ['config', 'prometheus']
+
+- name: Validate Prometheus configuration
+  command: docker run --rm -v {{ monitoring_stack_dir }}/configs/prometheus.yml:/etc/prometheus/prometheus.yml -v {{ monitoring_stack_dir }}/configs/alert-rules.yml:/etc/prometheus/alert-rules.yml --entrypoint promtool prom/prometheus:latest check config /etc/prometheus/prometheus.yml
+  register: prometheus_config_check
+  failed_when: false
+  changed_when: false
+  tags: ['config', 'prometheus']
+
+- name: Display Prometheus config validation result
+  debug:
+    msg: "Prometheus config validation: {{ prometheus_config_check.stdout if prometheus_config_check.rc == 0 else 'FAILED: ' + prometheus_config_check.stderr }}"
+  tags: ['config', 'prometheus']
 
 - name: Copy Loki configuration
   template:
@@ -49,6 +89,7 @@
     group: "{{ ansible_user }}"
     mode: '0644'
   notify: restart monitoring stack
+  tags: ['config', 'loki']
 
 - name: Copy Alertmanager configuration
   template:
@@ -58,6 +99,7 @@
     group: "{{ ansible_user }}"
     mode: '0644'
   notify: restart monitoring stack
+  tags: ['config', 'alertmanager']
 
 - name: Copy Grafana datasource provisioning
   template:
@@ -79,12 +121,13 @@
 
 - name: Copy alert rules for Prometheus
   template:
-    src: alert-rules.yml.j2
+    src: alert-rules-simple.yml.j2
     dest: "{{ monitoring_stack_dir }}/configs/alert-rules.yml"
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: '0644'
   notify: restart monitoring stack
+  tags: ['config', 'prometheus', 'alerts']
 
 - name: Copy Promtail configuration
   template:
@@ -94,6 +137,7 @@
     group: "{{ ansible_user }}"
     mode: '0644'
   notify: restart monitoring stack
+  tags: ['config', 'promtail']
 
 - name: Check if monitoring stack is already running
   command: docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml ps -q

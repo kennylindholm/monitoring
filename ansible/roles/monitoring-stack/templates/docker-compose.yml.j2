@@ -4,6 +4,7 @@ services:
   prometheus:
     image: {{ prometheus_image }}
     container_name: prometheus
+    user: "65534:65534"
     ports:
       - "{{ prometheus_port }}:9090"
     volumes:
@@ -28,6 +29,7 @@ services:
   grafana:
     image: {{ grafana_image }}
     container_name: grafana
+    user: "472:0"
     ports:
       - "{{ grafana_port }}:3000"
     volumes:
@@ -51,6 +53,7 @@ services:
   loki:
     image: {{ loki_image }}
     container_name: loki
+    user: "10001:10001"
     ports:
       - "{{ loki_port }}:3100"
     volumes:

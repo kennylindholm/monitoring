@@ -25,7 +25,9 @@ show_help() {
     echo "  install-docker      Install Docker only"
     echo "  deploy-all          Install Docker + Deploy monitoring"
     echo "  check               Run in check mode (dry run)"
-    echo "  ping                Test connectivity"
+    echo "  status              Check monitoring stack status"
+    echo "  logs                Show monitoring stack logs"
+    echo "  prometheus-logs     Show Prometheus logs specifically"
     echo "  help                Show this help"
     echo ""
     echo "Examples:"
@@ -74,7 +76,34 @@ case "${1:-help}" in
         ;;
     status)
         echo "Checking monitoring stack status..."
-        ansible debian_servers -a "/opt/monitoring/manage-stack.sh status" --become || echo "Monitoring stack not deployed yet"
+        echo "Running: docker compose ps in /opt/monitoring/"
+        ansible debian_servers -a "docker compose -f /opt/monitoring/docker-compose.yml ps" --become 2>/dev/null || echo "Monitoring stack not deployed yet"
+        ;;
+    update-config)
+        echo "Updating monitoring configuration..."
+        run_ansible "playbooks/deploy-monitoring.yml" "--tags config"
+        ;;
+    restart-prometheus)
+        echo "Restarting Prometheus service..."
+        ansible debian_servers -a "docker compose -f /opt/monitoring/docker-compose.yml restart prometheus" --become
+        ;;
+    logs)
+        echo "Showing monitoring stack logs..."
+        ansible debian_servers -a "docker compose -f /opt/monitoring/docker-compose.yml logs --tail=50" --become
+        ;;
+    prometheus-logs)
+        echo "Showing Prometheus logs..."
+        ansible debian_servers -a "docker compose -f /opt/monitoring/docker-compose.yml logs prometheus --tail=20" --become
+        ;;
+    validate-config)
+        echo "Validating Prometheus configuration..."
+        ansible debian_servers -a "docker run --rm -v /opt/monitoring/configs/prometheus.yml:/etc/prometheus/prometheus.yml -v /opt/monitoring/configs/alert-rules.yml:/etc/prometheus/alert-rules.yml --entrypoint promtool prom/prometheus:latest check config /etc/prometheus/prometheus.yml" --become
+        ;;
+    fix-permissions)
+        echo "Fixing data directory permissions..."
+        ansible debian_servers -a "chown -R 65534:65534 /opt/monitoring/prometheus/data" --become
+        ansible debian_servers -a "chown -R 472:0 /opt/monitoring/grafana/data" --become
+        ansible debian_servers -a "chown -R 10001:10001 /opt/monitoring/loki/data" --become
         ;;
     help|--help|-h)
         show_help

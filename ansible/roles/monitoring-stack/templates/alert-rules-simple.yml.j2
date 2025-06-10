@@ -37,15 +37,6 @@ groups:
           summary: "High disk usage on instance {{ "{{ $labels.instance }}" }}"
           description: "Disk usage is above 85% on {{ "{{ $labels.instance }}" }} filesystem {{ "{{ $labels.mountpoint }}" }}."
 
-      - alert: DiskWillFillIn24Hours
-        expr: predict_linear(node_filesystem_free_bytes{fstype!="tmpfs"}[1h], 24*3600) < 0
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Disk will fill in 24 hours on instance {{ "{{ $labels.instance }}" }}"
-          description: "Filesystem {{ "{{ $labels.mountpoint }}" }} on {{ "{{ $labels.instance }}" }} will fill up in approximately 24 hours."
-
   - name: docker.rules
     rules:
       - alert: ContainerKilled
@@ -57,15 +48,6 @@ groups:
           summary: "Container killed on instance {{ "{{ $labels.instance }}" }}"
           description: "A container has disappeared on {{ "{{ $labels.instance }}" }}"
 
-      - alert: ContainerAbsent
-        expr: absent(container_last_seen{name="prometheus"})
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Container absent"
-          description: "A container is absent for 5 min"
-
       - alert: ContainerCpuUsage
         expr: (sum(rate(container_cpu_usage_seconds_total{name!=""}[3m])) BY (instance, name) * 100) > 80
         for: 2m
@@ -74,15 +56,6 @@ groups:
         annotations:
           summary: "Container CPU usage on instance {{ "{{ $labels.instance }}" }}"
           description: "Container CPU usage is above 80% on {{ "{{ $labels.instance }}" }} for container {{ "{{ $labels.name }}" }}"
-
-      - alert: ContainerMemoryUsage
-        expr: (sum(container_memory_working_set_bytes{name!=""}) BY (instance, name) / sum(container_spec_memory_limit_bytes > 0) BY (instance, name) * 100) > 80
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Container Memory usage on instance {{ "{{ $labels.instance }}" }}"
-          description: "Container Memory usage is above 80% on {{ "{{ $labels.instance }}" }} for container {{ "{{ $labels.name }}" }}"
 
   - name: prometheus.rules
     rules:
@@ -104,15 +77,6 @@ groups:
           summary: "Prometheus target missing on instance {{ "{{ $labels.instance }}" }}"
           description: "A Prometheus target has disappeared. An exporter might be crashed."
 
-      - alert: PrometheusAllTargetsMissing
-        expr: count by (job) (up) == 0
-        for: 0m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Prometheus all targets missing for job {{ "{{ $labels.job }}" }}"
-          description: "A Prometheus job does not have living target anymore."
-
       - alert: PrometheusConfigurationReloadFailure
         expr: prometheus_config_last_reload_successful != 1
         for: 0m
@@ -121,33 +85,6 @@ groups:
         annotations:
           summary: "Prometheus configuration reload failure"
           description: "Prometheus configuration reload error"
-
-      - alert: PrometheusTooManyRestarts
-        expr: changes(process_start_time_seconds{job=~"prometheus|pushgateway|alertmanager"}[15m]) > 2
-        for: 0m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Prometheus too many restarts on instance {{ "{{ $labels.instance }}" }}"
-          description: "Prometheus has restarted more than twice in the last 15 minutes. It might be crashlooping."
-
-      - alert: PrometheusAlertmanagerJobMissing
-        expr: absent(up{job="alertmanager"})
-        for: 0m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Prometheus AlertManager job missing"
-          description: "A Prometheus AlertManager job has disappeared"
-
-      - alert: PrometheusAlertmanagerConfigurationReloadFailure
-        expr: alertmanager_config_last_reload_successful != 1
-        for: 0m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Prometheus AlertManager configuration reload failure"
-          description: "AlertManager configuration reload error"
 
   - name: grafana.rules
     rules:
@@ -160,40 +97,13 @@ groups:
           summary: "Grafana is down"
           description: "Grafana has been down for more than 5 minutes."
 
-  - name: loki.rules
+  - name: alertmanager.rules
     rules:
-      - alert: LokiDown
-        expr: up{job="loki"} == 0
+      - alert: AlertmanagerDown
+        expr: up{job="alertmanager"} == 0
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: "Loki is down"
-          description: "Loki has been down for more than 5 minutes."
-
-      - alert: LokiRequestErrors
-        expr: sum(rate(loki_request_duration_seconds_count{status_code=~"5.."}[1m])) > 0.1
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Loki request errors"
-          description: "Loki is experiencing {{ "{{ printf \"%.2f\" $value }}" }} errors per second."
-
-{% if enable_default_alerts and custom_alert_rules is defined and custom_alert_rules | length > 0 %}
-  - name: custom.rules
-    rules:
-{% for rule in custom_alert_rules %}
-      - alert: {{ rule.alert }}
-        expr: {{ rule.expr }}
-        {% if rule.for is defined %}for: {{ rule.for }}{% endif %}
-        labels:
-          {% for key, value in rule.labels.items() %}
-          {{ key }}: {{ value }}
-          {% endfor %}
-        annotations:
-          {% for key, value in rule.annotations.items() %}
-          {{ key }}: {{ value }}
-          {% endfor %}
-{% endfor %}
-{% endif %}
+          summary: "Alertmanager is down"
+          description: "Alertmanager has been down for more than 5 minutes."

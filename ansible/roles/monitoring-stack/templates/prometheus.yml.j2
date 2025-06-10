@@ -54,6 +54,7 @@ scrape_configs:
     scrape_interval: 30s
     metrics_path: /metrics
 
+{% if additional_scrape_targets is defined and additional_scrape_targets | length > 0 %}
 {% for target in additional_scrape_targets %}
   - job_name: '{{ target.job_name }}'
     {% if target.static_configs is defined %}
@@ -83,7 +84,4 @@ scrape_configs:
       password: {{ target.basic_auth.password }}
     {% endif %}
 {% endfor %}
-
-storage:
-  tsdb:
-    retention.time: {{ prometheus_retention }}
+{% endif %}

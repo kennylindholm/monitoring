@@ -1,32 +1,19 @@
 global:
-  smtp_smarthost: '{{ alertmanager_smtp_server }}'
-  smtp_from: '{{ alertmanager_smtp_from }}'
-  smtp_auth_username: '{{ alertmanager_smtp_from }}'
-  smtp_require_tls: true
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alertmanager@localhost'
 
 route:
   group_by: ['alertname']
   group_wait: 10s
   group_interval: 10s
   repeat_interval: 1h
-  receiver: 'web.hook'
+  receiver: 'default'
 
 receivers:
-  - name: 'web.hook'
-    email_configs:
-      - to: '{{ alertmanager_receiver_email }}'
-        subject: '[ALERT] {{ "{{" }} .GroupLabels.alertname {{ "}}" }}'
-        body: |
-          {{ "{{" }} range .Alerts -{{ "}}" }}
-          Alert: {{ "{{" }} .Annotations.title {{ "}}" }}
-          Description: {{ "{{" }} .Annotations.description {{ "}}" }}
-          Graph: {{ "{{" }} .GeneratorURL {{ "}}" }}
-          Details:
-          {{ "{{" }} range .Labels.SortedPairs {{ "}}" }} • {{ "{{" }} .Name {{ "}}" }}: {{ "{{" }} .Value {{ "}}" }}
-          {{ "{{" }} end {{ "}}" }}
-          {{ "{{" }} end {{ "}}" }}
-        headers:
-          Subject: '[ALERT] {{ "{{" }} .GroupLabels.alertname {{ "}}" }}'
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://localhost:5001/'
+        send_resolved: true
 
   - name: 'null'
 
@@ -35,7 +22,4 @@ inhibit_rules:
       severity: 'critical'
     target_match:
       severity: 'warning'
-    equal: ['alertname', 'dev', 'instance']
-
-templates:
-  - '/etc/alertmanager/templates/*.tmpl'
+    equal: ['alertname', 'instance']

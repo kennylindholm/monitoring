@@ -59,9 +59,9 @@
     mode: '0644'
   notify: restart monitoring stack
 
-- name: Copy Prometheus configuration (simple version for debugging)
+- name: Copy Prometheus configuration
   template:
-    src: prometheus-simple.yml.j2
+    src: prometheus.yml.j2
     dest: "{{ monitoring_stack_dir }}/configs/prometheus.yml"
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
@@ -72,13 +72,13 @@
 - name: Validate Prometheus configuration
   command: docker run --rm -v {{ monitoring_stack_dir }}/configs/prometheus.yml:/etc/prometheus/prometheus.yml -v {{ monitoring_stack_dir }}/configs/alert-rules.yml:/etc/prometheus/alert-rules.yml --entrypoint promtool prom/prometheus:latest check config /etc/prometheus/prometheus.yml
   register: prometheus_config_check
-  failed_when: false
+  failed_when: prometheus_config_check.rc != 0
   changed_when: false
   tags: ['config', 'prometheus']
 
 - name: Display Prometheus config validation result
   debug:
-    msg: "Prometheus config validation: {{ prometheus_config_check.stdout if prometheus_config_check.rc == 0 else 'FAILED: ' + prometheus_config_check.stderr }}"
+    msg: "Prometheus config validation: {{ prometheus_config_check.stdout }}"
   tags: ['config', 'prometheus']
 
 - name: Copy Loki configuration
@@ -121,7 +121,7 @@
 
 - name: Copy alert rules for Prometheus
   template:
-    src: alert-rules-simple.yml.j2
+    src: alert-rules.yml.j2
     dest: "{{ monitoring_stack_dir }}/configs/alert-rules.yml"
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"

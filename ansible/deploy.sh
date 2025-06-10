@@ -26,8 +26,10 @@ show_help() {
     echo "  deploy-all          Install Docker + Deploy monitoring"
     echo "  check               Run in check mode (dry run)"
     echo "  status              Check monitoring stack status"
+    echo "  restart             Restart monitoring stack"
     echo "  logs                Show monitoring stack logs"
     echo "  prometheus-logs     Show Prometheus logs specifically"
+    echo "  loki-logs           Show Loki logs specifically"
     echo "  help                Show this help"
     echo ""
     echo "Examples:"
@@ -87,6 +89,10 @@ case "${1:-help}" in
         echo "Restarting Prometheus service..."
         ansible debian_servers -a "docker compose -f /opt/monitoring/docker-compose.yml restart prometheus" --become
         ;;
+    restart)
+        echo "Restarting monitoring stack..."
+        ansible debian_servers -a "docker compose -f /opt/monitoring/docker-compose.yml restart" --become
+        ;;
     logs)
         echo "Showing monitoring stack logs..."
         ansible debian_servers -a "docker compose -f /opt/monitoring/docker-compose.yml logs --tail=50" --become
@@ -94,6 +100,10 @@ case "${1:-help}" in
     prometheus-logs)
         echo "Showing Prometheus logs..."
         ansible debian_servers -a "docker compose -f /opt/monitoring/docker-compose.yml logs prometheus --tail=20" --become
+        ;;
+    loki-logs)
+        echo "Showing Loki logs..."
+        ansible debian_servers -a "docker compose -f /opt/monitoring/docker-compose.yml logs loki --tail=20" --become
         ;;
     validate-config)
         echo "Validating Prometheus configuration..."

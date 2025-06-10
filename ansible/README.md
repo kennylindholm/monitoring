@@ -1,6 +1,6 @@
-# Ansible Docker Installation Boilerplate
+# Ansible Infrastructure Management Boilerplate
 
-This Ansible boilerplate provides a complete setup to install Docker on Debian 12 servers. It includes best practices for Ansible project structure and Docker installation.
+This Ansible boilerplate provides a complete setup to install Docker and deploy a full monitoring stack (Grafana, Prometheus, Loki, Alertmanager) on Debian 12 servers. It includes best practices for Ansible project structure and production-ready monitoring deployment.
 
 ## Project Structure
 
@@ -11,15 +11,21 @@ ansible/
 ├── inventories/
 │   └── hosts               # Server inventory
 ├── playbooks/
-│   └── install-docker.yml  # Docker installation playbook
-└── roles/
-    └── docker/
-        ├── tasks/
-        │   └── main.yml    # Docker installation tasks
-        ├── handlers/
-        │   └── main.yml    # Service handlers
-        └── vars/
-            └── main.yml    # Role variables
+│   ├── install-docker.yml  # Docker installation playbook
+│   └── deploy-monitoring.yml # Monitoring stack deployment
+├── roles/
+│   ├── docker/             # Docker installation role
+│   │   ├── tasks/
+│   │   ├── handlers/
+│   │   └── vars/
+│   └── monitoring-stack/   # Monitoring stack role
+│       ├── tasks/
+│       ├── handlers/
+│       ├── templates/      # Configuration templates
+│       ├── vars/
+│       └── files/
+└── examples/
+    └── docker-compose.example.yml
 ```
 
 ## Prerequisites
@@ -65,28 +71,37 @@ cd monitoring/ansible
 ansible debian_servers -m ping
 ```
 
-### 3. Run the Docker Installation
+### 3. Deploy Infrastructure
 
-Execute the playbook to install Docker:
+Execute playbooks to install Docker and monitoring stack:
 
 ```bash
-# Install Docker on all Debian servers
+# Install Docker and deploy monitoring stack
 ansible-playbook site.yml
 
-# Or run the specific Docker playbook
+# Install only Docker
 ansible-playbook playbooks/install-docker.yml
 
+# Deploy only monitoring stack (requires Docker)
+ansible-playbook playbooks/deploy-monitoring.yml
+
 # Run with system update (recommended for new servers)
-ansible-playbook playbooks/install-docker.yml -e "update_system=true"
+ansible-playbook site.yml -e "update_system=true"
 ```
 
-### 4. Target Specific Servers
+### 4. Target Specific Servers or Services
 
-Run on specific servers or groups:
+Run on specific servers or deploy specific services:
 
 ```bash
 # Target specific server
 ansible-playbook site.yml --limit your-server-1
+
+# Deploy only Docker (skip monitoring)
+ansible-playbook site.yml --tags docker
+
+# Deploy only monitoring stack (skip Docker installation)
+ansible-playbook site.yml --tags monitoring
 
 # Target specific group
 ansible-playbook site.yml --limit debian_servers
@@ -124,6 +139,7 @@ ansible-playbook site.yml -e "update_system=true"
 
 ## What This Playbook Does
 
+### Docker Installation
 1. **System Verification**: Confirms the target is running Debian 12
 2. **Package Updates**: Updates system packages (optional)
 3. **Prerequisites**: Installs required packages (curl, ca-certificates, etc.)
@@ -132,20 +148,37 @@ ansible-playbook site.yml -e "update_system=true"
 6. **Service Configuration**: Enables and starts Docker service
 7. **User Management**: Adds specified users to the docker group
 8. **Verification**: Tests Docker installation with hello-world container
-9. **Docker Compose**: Verifies Docker Compose plugin installation
+
+### Monitoring Stack Deployment
+1. **Infrastructure Setup**: Creates monitoring directories and configuration
+2. **Service Deployment**: Deploys Prometheus, Grafana, Loki, and Alertmanager
+3. **Monitoring Agents**: Installs Node Exporter, cAdvisor, and Promtail
+4. **Configuration**: Sets up datasources, dashboards, and alert rules
+5. **Health Checks**: Verifies all services are running and accessible
+6. **Management Tools**: Creates management scripts and systemd service
+7. **Firewall Configuration**: Optionally configures firewall rules
 
 ## Installed Components
 
+### Docker Platform
 - Docker CE (Community Edition)
 - Docker CLI
 - containerd.io
 - Docker Buildx plugin
 - Docker Compose plugin
 
+### Monitoring Stack
+- **Prometheus**: Metrics collection and alerting
+- **Grafana**: Visualization and dashboards
+- **Loki**: Log aggregation and analysis
+- **Alertmanager**: Alert routing and management
+- **Node Exporter**: System metrics collection
+- **cAdvisor**: Container metrics collection
+- **Promtail**: Log collection agent
+
 ## Post-Installation
 
-After successful installation, you can:
-
+### Docker Commands
 ```bash
 # Check Docker version
 docker --version
@@ -158,6 +191,32 @@ docker compose version
 
 # Check Docker service status
 systemctl status docker
+```
+
+### Monitoring Stack Access
+After deployment, access your monitoring services:
+
+- **Grafana**: http://YOUR_SERVER_IP:3000 (admin/admin123)
+- **Prometheus**: http://YOUR_SERVER_IP:9090
+- **Loki**: http://YOUR_SERVER_IP:3100
+- **Alertmanager**: http://YOUR_SERVER_IP:9093
+
+### Monitoring Stack Management
+```bash
+# Use the management script
+/opt/monitoring/manage-stack.sh status
+/opt/monitoring/manage-stack.sh logs
+/opt/monitoring/manage-stack.sh restart
+
+# Or use the shortcuts
+monitoring-stack status
+monitoring-stack health
+monitoring-stack backup
+
+# Using Make commands
+make monitoring-status
+make monitoring-logs
+make monitoring-health
 ```
 
 ## Troubleshooting
@@ -195,6 +254,7 @@ Test what changes would be made without applying them:
 
 ```bash
 ansible-playbook site.yml --check
+ansible-playbook playbooks/deploy-monitoring.yml --check
 ```
 
 ## Security Considerations
@@ -204,14 +264,71 @@ ansible-playbook site.yml --check
 3. **Firewall**: Configure appropriate firewall rules for Docker
 4. **Network**: Secure Docker daemon socket if exposing over network
 
+## Available Make Commands
+
+```bash
+# Docker Installation
+make install              # Install Docker on all servers
+make install-update       # Install Docker with system updates
+make test                 # Test Docker installation
+
+# Monitoring Stack
+make deploy-monitoring    # Deploy complete monitoring stack
+make monitoring-status    # Show monitoring stack status
+make monitoring-logs      # Show monitoring stack logs
+make monitoring-health    # Check monitoring stack health
+make monitoring-backup    # Create backup of monitoring data
+
+# Development
+make check                # Run playbooks in check mode
+make syntax               # Check playbook syntax
+make ping                 # Test server connectivity
+```
+
+## Monitoring Stack Configuration
+
+### Default Services and Ports
+- Grafana: 3000
+- Prometheus: 9090
+- Loki: 3100
+- Alertmanager: 9093
+- Node Exporter: 9100
+- cAdvisor: 8080
+
+### Customization Options
+Override default settings:
+
+```bash
+# Custom Grafana password
+make deploy-monitoring-custom EXTRA_VARS="grafana_admin_password=mysecretpass"
+
+# Custom ports
+ansible-playbook playbooks/deploy-monitoring.yml -e "grafana_port=3001 prometheus_port=9091"
+
+# Disable certain components
+ansible-playbook playbooks/deploy-monitoring.yml -e "cadvisor_enabled=false"
+```
+
+### Data Persistence
+All monitoring data is stored in `/opt/monitoring/` with the following structure:
+```
+/opt/monitoring/
+├── prometheus/data/      # Metrics data
+├── grafana/data/         # Dashboards and users
+├── loki/data/           # Log data
+├── alertmanager/data/   # Alert state
+└── configs/             # Service configurations
+```
+
 ## Extending the Boilerplate
 
 This boilerplate can be extended with additional roles:
 
-1. **Monitoring**: Add Prometheus, Grafana, or other monitoring tools
-2. **Security**: Implement security hardening
-3. **Applications**: Deploy containerized applications
-4. **Backup**: Implement backup strategies
+1. **Security**: Implement security hardening
+2. **Applications**: Deploy containerized applications
+3. **Backup**: Implement automated backup strategies
+4. **Load Balancing**: Add nginx or HAProxy for load balancing
+5. **SSL/TLS**: Implement SSL termination and certificate management
 
 ## License
 

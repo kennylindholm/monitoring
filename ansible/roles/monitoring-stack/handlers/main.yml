@@ -1,0 +1,41 @@
+---
+- name: restart monitoring stack
+  command: docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml restart
+  args:
+    chdir: "{{ monitoring_stack_dir }}"
+
+- name: stop monitoring stack
+  command: docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml down
+  args:
+    chdir: "{{ monitoring_stack_dir }}"
+
+- name: start monitoring stack
+  command: docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ monitoring_stack_dir }}"
+
+- name: reload prometheus
+  command: docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml exec -T prometheus promtool config reload
+  args:
+    chdir: "{{ monitoring_stack_dir }}"
+  ignore_errors: yes
+
+- name: restart prometheus
+  command: docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml restart prometheus
+  args:
+    chdir: "{{ monitoring_stack_dir }}"
+
+- name: restart grafana
+  command: docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml restart grafana
+  args:
+    chdir: "{{ monitoring_stack_dir }}"
+
+- name: restart loki
+  command: docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml restart loki
+  args:
+    chdir: "{{ monitoring_stack_dir }}"
+
+- name: restart alertmanager
+  command: docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml restart alertmanager
+  args:
+    chdir: "{{ monitoring_stack_dir }}"

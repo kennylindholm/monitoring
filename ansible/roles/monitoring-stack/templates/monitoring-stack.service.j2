@@ -1,0 +1,47 @@
+[Unit]
+Description=Monitoring Stack (Prometheus, Grafana, Loki, Alertmanager)
+Requires=docker.service
+After=docker.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User={{ monitoring_user }}
+Group=docker
+WorkingDirectory={{ monitoring_stack_dir }}
+
+# Start command
+ExecStart=/usr/bin/docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml up -d
+
+# Stop command
+ExecStop=/usr/bin/docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml down
+
+# Reload command
+ExecReload=/usr/bin/docker compose -f {{ monitoring_stack_dir }}/docker-compose.yml restart
+
+# Health check
+ExecStartPost=/bin/bash -c 'sleep 30 && curl -f http://localhost:{{ grafana_port }}/api/health && curl -f http://localhost:{{ prometheus_port }}/-/ready'
+
+# Restart policy
+Restart=on-failure
+RestartSec=30
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ monitoring_stack_dir }}
+
+# Environment
+Environment=COMPOSE_PROJECT_NAME=monitoring-stack
+Environment=DOCKER_BUILDKIT=1
+
+# Timeout settings
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

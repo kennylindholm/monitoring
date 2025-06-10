@@ -1,0 +1,227 @@
+---
+- name: Deploy Monitoring Stack (Grafana, Prometheus, Loki, Alertmanager)
+  hosts: debian_servers
+  become: yes
+  gather_facts: yes
+  
+  pre_tasks:
+    - name: Verify Docker is installed
+      command: docker --version
+      register: docker_check
+      failed_when: docker_check.rc != 0
+      changed_when: false
+      
+    - name: Verify Docker Compose is available
+      command: docker compose version
+      register: compose_check
+      failed_when: compose_check.rc != 0
+      changed_when: false
+      
+    - name: Create monitoring user if specified
+      user:
+        name: "{{ monitoring_user | default(ansible_user) }}"
+        groups: docker
+        append: yes
+        shell: /bin/bash
+        create_home: yes
+      when: monitoring_user is defined and monitoring_user != ansible_user
+      
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: update_packages | default(false) | bool
+      
+    - name: Install additional packages
+      apt:
+        name:
+          - curl
+          - jq
+          - htop
+          - tree
+        state: present
+
+  roles:
+    - monitoring-stack
+
+  post_tasks:
+    - name: Wait for all services to be fully ready
+      wait_for:
+        port: "{{ item.port }}"
+        host: localhost
+        delay: 30
+        timeout: 300
+      loop:
+        - { port: "{{ prometheus_port }}", name: "Prometheus" }
+        - { port: "{{ grafana_port }}", name: "Grafana" }
+        - { port: "{{ loki_port }}", name: "Loki" }
+        - { port: "{{ alertmanager_port }}", name: "Alertmanager" }
+      register: service_ready
+      
+    - name: Test Prometheus API
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/api/v1/query?query=up"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: prometheus_test
+      retries: 5
+      delay: 10
+      
+    - name: Test Grafana API
+      uri:
+        url: "http://localhost:{{ grafana_port }}/api/health"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: grafana_test
+      retries: 5
+      delay: 10
+      
+    - name: Test Loki readiness
+      uri:
+        url: "http://localhost:{{ loki_port }}/ready"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: loki_test
+      retries: 5
+      delay: 10
+      
+    - name: Test Alertmanager readiness
+      uri:
+        url: "http://localhost:{{ alertmanager_port }}/-/ready"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: alertmanager_test
+      retries: 5
+      delay: 10
+      
+    - name: Configure firewall rules (if UFW is enabled)
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        comment: "Monitoring Stack"
+      loop:
+        - "{{ prometheus_port }}"
+        - "{{ grafana_port }}"
+        - "{{ loki_port }}"
+        - "{{ alertmanager_port }}"
+        - "{{ node_exporter_port | default(9100) }}"
+        - "{{ cadvisor_port | default(8080) }}"
+      when: 
+        - configure_firewall | default(false) | bool
+        - ansible_facts['os_family'] == "Debian"
+      ignore_errors: yes
+      
+    - name: Create monitoring stack service file
+      template:
+        src: monitoring-stack.service.j2
+        dest: /etc/systemd/system/monitoring-stack.service
+        mode: '0644'
+      vars:
+        monitoring_stack_dir: "{{ monitoring_stack_dir }}"
+        monitoring_user: "{{ monitoring_user | default(ansible_user) }}"
+      when: create_systemd_service | default(true) | bool
+      notify: reload systemd
+      
+    - name: Enable and start monitoring stack service
+      systemd:
+        name: monitoring-stack
+        enabled: yes
+        state: started
+        daemon_reload: yes
+      when: create_systemd_service | default(true) | bool
+      
+    - name: Create monitoring stack shortcuts
+      file:
+        src: "{{ monitoring_stack_dir }}/manage-stack.sh"
+        dest: "/usr/local/bin/{{ item }}"
+        state: link
+        force: yes
+      loop:
+        - monitoring-stack
+        - mon-stack
+      when: create_shortcuts | default(true) | bool
+      
+    - name: Display deployment summary
+      debug:
+        msg: |
+          ========================================
+          Monitoring Stack Deployment Complete!
+          ========================================
+          
+          Services Status:
+          - Prometheus: {{ 'Ready' if prometheus_test.status == 200 else 'Failed' }}
+          - Grafana: {{ 'Ready' if grafana_test.status == 200 else 'Failed' }}
+          - Loki: {{ 'Ready' if loki_test.status == 200 else 'Failed' }}
+          - Alertmanager: {{ 'Ready' if alertmanager_test.status == 200 else 'Failed' }}
+          
+          Access URLs:
+          - Grafana: http://{{ ansible_default_ipv4.address }}:{{ grafana_port }}
+            Default credentials: {{ grafana_admin_user }} / {{ grafana_admin_password }}
+          - Prometheus: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port }}
+          - Loki: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}
+          - Alertmanager: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}
+          {% if node_exporter_enabled %}
+          - Node Exporter: http://{{ ansible_default_ipv4.address }}:{{ node_exporter_port }}
+          {% endif %}
+          {% if cadvisor_enabled %}
+          - cAdvisor: http://{{ ansible_default_ipv4.address }}:{{ cadvisor_port }}
+          {% endif %}
+          
+          Management:
+          - Stack directory: {{ monitoring_stack_dir }}
+          - Management script: {{ monitoring_stack_dir }}/manage-stack.sh
+          - Quick commands: monitoring-stack [start|stop|status|logs|health]
+          
+          Initial Setup:
+          1. Access Grafana and explore pre-configured dashboards
+          2. Check Prometheus targets at /targets endpoint
+          3. View logs in Loki through Grafana's Explore feature
+          4. Configure Alertmanager notifications in {{ monitoring_stack_dir }}/configs/alertmanager.yml
+          
+          Data Persistence:
+          All monitoring data is stored in {{ monitoring_stack_dir }} and will survive container restarts.
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+  vars:
+    # Default configuration - can be overridden in inventory or command line
+    monitoring_stack_dir: "/opt/monitoring"
+    
+    # Service ports
+    prometheus_port: 9090
+    grafana_port: 3000
+    loki_port: 3100
+    alertmanager_port: 9093
+    node_exporter_port: 9100
+    cadvisor_port: 8080
+    
+    # Grafana settings
+    grafana_admin_user: admin
+    grafana_admin_password: "admin123"
+    
+    # Feature flags
+    node_exporter_enabled: true
+    cadvisor_enabled: true
+    promtail_enabled: true
+    
+    # Deployment options
+    update_packages: false
+    configure_firewall: false
+    create_systemd_service: true
+    create_shortcuts: true
+    
+    # Retention settings
+    prometheus_retention: "30d"
+    loki_retention_period: "744h"  # 31 days
+    
+    # Email alerting (configure as needed)
+    alertmanager_smtp_server: ""
+    alertmanager_smtp_from: ""
+    alertmanager_receiver_email: ""

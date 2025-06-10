@@ -1,0 +1,41 @@
+global:
+  smtp_smarthost: '{{ alertmanager_smtp_server }}'
+  smtp_from: '{{ alertmanager_smtp_from }}'
+  smtp_auth_username: '{{ alertmanager_smtp_from }}'
+  smtp_require_tls: true
+
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'web.hook'
+
+receivers:
+  - name: 'web.hook'
+    email_configs:
+      - to: '{{ alertmanager_receiver_email }}'
+        subject: '[ALERT] {{ "{{" }} .GroupLabels.alertname {{ "}}" }}'
+        body: |
+          {{ "{{" }} range .Alerts -{{ "}}" }}
+          Alert: {{ "{{" }} .Annotations.title {{ "}}" }}
+          Description: {{ "{{" }} .Annotations.description {{ "}}" }}
+          Graph: {{ "{{" }} .GeneratorURL {{ "}}" }}
+          Details:
+          {{ "{{" }} range .Labels.SortedPairs {{ "}}" }} • {{ "{{" }} .Name {{ "}}" }}: {{ "{{" }} .Value {{ "}}" }}
+          {{ "{{" }} end {{ "}}" }}
+          {{ "{{" }} end {{ "}}" }}
+        headers:
+          Subject: '[ALERT] {{ "{{" }} .GroupLabels.alertname {{ "}}" }}'
+
+  - name: 'null'
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']
+
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'

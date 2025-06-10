@@ -3,8 +3,9 @@
 - import_playbook: playbooks/install-docker.yml
   tags: docker
 
+- import_playbook: playbooks/deploy-monitoring.yml
+  tags: monitoring
+
 # Additional playbooks can be added here as the project grows
-# - import_playbook: playbooks/monitoring.yml
-#   tags: monitoring
 # - import_playbook: playbooks/security.yml
 #   tags: security

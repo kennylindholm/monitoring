@@ -1,0 +1,89 @@
+global:
+  scrape_interval: {{ prometheus_scrape_interval }}
+  evaluation_interval: {{ prometheus_evaluation_interval }}
+  external_labels:
+    monitor: 'monitoring-stack'
+
+rule_files:
+  - "/etc/prometheus/alert-rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+{% if node_exporter_enabled %}
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+    metrics_path: /metrics
+{% endif %}
+
+{% if cadvisor_enabled %}
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 15s
+    metrics_path: /metrics
+{% endif %}
+
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  - job_name: 'loki'
+    static_configs:
+      - targets: ['loki:3100']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+{% for target in additional_scrape_targets %}
+  - job_name: '{{ target.job_name }}'
+    {% if target.static_configs is defined %}
+    static_configs:
+      {% for config in target.static_configs %}
+      - targets: {{ config.targets | to_json }}
+        {% if config.labels is defined %}
+        labels:
+          {% for key, value in config.labels.items() %}
+          {{ key }}: {{ value }}
+          {% endfor %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    {% if target.scrape_interval is defined %}
+    scrape_interval: {{ target.scrape_interval }}
+    {% endif %}
+    {% if target.metrics_path is defined %}
+    metrics_path: {{ target.metrics_path }}
+    {% endif %}
+    {% if target.scheme is defined %}
+    scheme: {{ target.scheme }}
+    {% endif %}
+    {% if target.basic_auth is defined %}
+    basic_auth:
+      username: {{ target.basic_auth.username }}
+      password: {{ target.basic_auth.password }}
+    {% endif %}
+{% endfor %}
+
+storage:
+  tsdb:
+    retention.time: {{ prometheus_retention }}

@@ -1,18 +1,29 @@
 # Ansible Docker Installation Makefile
 # Common operations for managing Docker installation via Ansible
 
-.PHONY: help ping install install-update check syntax lint clean test
+.PHONY: help ping install install-update check syntax lint clean test deploy-monitoring monitoring-status monitoring-logs monitoring-stop monitoring-start
 
 # Default target
 help:
 	@echo "Available targets:"
+	@echo ""
+	@echo "Docker Installation:"
 	@echo "  ping           - Test connectivity to all servers"
 	@echo "  install        - Install Docker on all Debian servers"
 	@echo "  install-update - Install Docker with system updates"
+	@echo "  test           - Test Docker installation"
+	@echo ""
+	@echo "Monitoring Stack:"
+	@echo "  deploy-monitoring - Deploy complete monitoring stack"
+	@echo "  monitoring-status - Show monitoring stack status"
+	@echo "  monitoring-logs   - Show monitoring stack logs"
+	@echo "  monitoring-start  - Start monitoring stack"
+	@echo "  monitoring-stop   - Stop monitoring stack"
+	@echo ""
+	@echo "Development:"
 	@echo "  check          - Run playbook in check mode (dry run)"
 	@echo "  syntax         - Check playbook syntax"
 	@echo "  lint           - Lint playbooks with ansible-lint"
-	@echo "  test           - Test Docker installation"
 	@echo "  clean          - Clean up temporary files"
 	@echo "  help           - Show this help message"
 
@@ -48,6 +59,46 @@ test:
 	ansible debian_servers -a "docker --version"
 	ansible debian_servers -a "docker compose version"
 
+# Deploy monitoring stack (Grafana, Prometheus, Loki, Alertmanager)
+deploy-monitoring:
+	ansible-playbook playbooks/deploy-monitoring.yml
+
+# Deploy monitoring with custom settings
+deploy-monitoring-custom:
+	ansible-playbook playbooks/deploy-monitoring.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+
+# Show monitoring stack status
+monitoring-status:
+	ansible debian_servers -a "/opt/monitoring/manage-stack.sh status" --become
+
+# Show monitoring stack logs
+monitoring-logs:
+	ansible debian_servers -a "/opt/monitoring/manage-stack.sh logs" --become
+
+# Start monitoring stack
+monitoring-start:
+	ansible debian_servers -a "/opt/monitoring/manage-stack.sh start" --become
+
+# Stop monitoring stack
+monitoring-stop:
+	ansible debian_servers -a "/opt/monitoring/manage-stack.sh stop" --become
+
+# Restart monitoring stack
+monitoring-restart:
+	ansible debian_servers -a "/opt/monitoring/manage-stack.sh restart" --become
+
+# Check monitoring stack health
+monitoring-health:
+	ansible debian_servers -a "/opt/monitoring/manage-stack.sh health" --become
+
+# Show monitoring URLs
+monitoring-urls:
+	ansible debian_servers -a "/opt/monitoring/manage-stack.sh urls" --become
+
+# Backup monitoring stack
+monitoring-backup:
+	ansible debian_servers -a "/opt/monitoring/manage-stack.sh backup" --become
+
 # Clean up temporary files
 clean:
 	find . -name "*.retry" -delete
@@ -82,6 +133,9 @@ update-system:
 # Examples of usage:
 # make install
 # make install-update
+# make deploy-monitoring
+# make monitoring-status
 # make check
 # make install-server SERVER=debian-server-1
 # make install-custom EXTRA_VARS="docker_users=['user1','user2']"
+# make deploy-monitoring-custom EXTRA_VARS="grafana_admin_password=newsecretpass"

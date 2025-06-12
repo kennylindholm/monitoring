@@ -7,6 +7,7 @@ set -e
 
 STACK_DIR="{{ monitoring_stack_dir }}"
 COMPOSE_FILE="$STACK_DIR/docker-compose.yml"
+PROJECT_NAME="monitoring-stack"
 
 cd "$STACK_DIR"
 
@@ -45,7 +46,7 @@ function check_docker() {
         echo "Error: Docker is not installed or not in PATH"
         exit 1
     fi
-    
+
     if ! docker compose version &> /dev/null; then
         echo "Error: Docker Compose is not available"
         exit 1
@@ -54,57 +55,57 @@ function check_docker() {
 
 function start_stack() {
     echo "Starting monitoring stack..."
-    docker compose -f "$COMPOSE_FILE" up -d
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" up -d
     echo "Monitoring stack started successfully!"
     show_urls
 }
 
 function stop_stack() {
     echo "Stopping monitoring stack..."
-    docker compose -f "$COMPOSE_FILE" down
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" down
     echo "Monitoring stack stopped successfully!"
 }
 
 function restart_stack() {
     echo "Restarting monitoring stack..."
-    docker compose -f "$COMPOSE_FILE" restart
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" restart
     echo "Monitoring stack restarted successfully!"
 }
 
 function show_status() {
     echo "Monitoring stack status:"
-    docker compose -f "$COMPOSE_FILE" ps
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" ps
 }
 
 function show_logs() {
     if [ "$1" = "-f" ]; then
-        docker compose -f "$COMPOSE_FILE" logs -f
+        docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" logs -f
     else
-        docker compose -f "$COMPOSE_FILE" logs
+        docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" logs
     fi
 }
 
 function update_stack() {
     echo "Updating monitoring stack..."
-    docker compose -f "$COMPOSE_FILE" pull
-    docker compose -f "$COMPOSE_FILE" up -d
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" pull
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" up -d
     echo "Monitoring stack updated successfully!"
 }
 
 function backup_stack() {
     BACKUP_DIR="$STACK_DIR/backups/$(date +%Y%m%d_%H%M%S)"
     echo "Creating backup in $BACKUP_DIR..."
-    
+
     mkdir -p "$BACKUP_DIR"
-    
+
     # Backup configurations
     cp -r configs "$BACKUP_DIR/"
     cp docker-compose.yml "$BACKUP_DIR/"
-    
+
     # Backup data (stop services first for consistency)
     echo "Stopping services for consistent backup..."
-    docker compose -f "$COMPOSE_FILE" stop
-    
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" stop
+
     # Create data archives
     if [ -d "prometheus/data" ]; then
         tar -czf "$BACKUP_DIR/prometheus-data.tar.gz" prometheus/data
@@ -118,11 +119,11 @@ function backup_stack() {
     if [ -d "alertmanager/data" ]; then
         tar -czf "$BACKUP_DIR/alertmanager-data.tar.gz" alertmanager/data
     fi
-    
+
     # Restart services
     echo "Restarting services..."
-    docker compose -f "$COMPOSE_FILE" start
-    
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" start
+
     echo "Backup completed: $BACKUP_DIR"
 }
 
@@ -133,13 +134,13 @@ function restore_stack() {
         ls -la "$STACK_DIR/backups/" 2>/dev/null || echo "No backups found"
         exit 1
     fi
-    
+
     BACKUP_DIR="$2"
     if [ ! -d "$BACKUP_DIR" ]; then
         echo "Error: Backup directory $BACKUP_DIR not found"
         exit 1
     fi
-    
+
     echo "Restoring from $BACKUP_DIR..."
     echo "Warning: This will overwrite current data. Continue? (y/N)"
     read -r confirm
@@ -147,10 +148,10 @@ function restore_stack() {
         echo "Restore cancelled"
         exit 0
     fi
-    
+
     # Stop services
-    docker compose -f "$COMPOSE_FILE" down
-    
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" down
+
     # Restore configurations
     if [ -d "$BACKUP_DIR/configs" ]; then
         cp -r "$BACKUP_DIR/configs" .
@@ -158,7 +159,7 @@ function restore_stack() {
     if [ -f "$BACKUP_DIR/docker-compose.yml" ]; then
         cp "$BACKUP_DIR/docker-compose.yml" .
     fi
-    
+
     # Restore data
     if [ -f "$BACKUP_DIR/prometheus-data.tar.gz" ]; then
         rm -rf prometheus/data
@@ -176,28 +177,28 @@ function restore_stack() {
         rm -rf alertmanager/data
         tar -xzf "$BACKUP_DIR/alertmanager-data.tar.gz"
     fi
-    
+
     # Start services
-    docker compose -f "$COMPOSE_FILE" up -d
-    
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" up -d
+
     echo "Restore completed successfully!"
 }
 
 function check_health() {
     echo "Checking health of monitoring services..."
     echo ""
-    
+
     services=(
         "prometheus:{{ prometheus_port }}:/api/v1/query?query=up"
         "grafana:{{ grafana_port }}:/api/health"
         "loki:{{ loki_port }}:/ready"
         "alertmanager:{{ alertmanager_port }}:/-/ready"
     )
-    
+
     for service in "${services[@]}"; do
         IFS=':' read -r name port path <<< "$service"
         echo -n "Checking $name... "
-        
+
         if curl -s -f "http://localhost:$port$path" > /dev/null; then
             echo "✓ Healthy"
         else
@@ -235,13 +236,13 @@ function cleanup() {
 function manage_service() {
     service="$1"
     action="$2"
-    
+
     case "$action" in
         start|stop|restart)
-            docker compose -f "$COMPOSE_FILE" "$action" "$service"
+            docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$action" "$service"
             ;;
         logs)
-            docker compose -f "$COMPOSE_FILE" logs -f "$service"
+            docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" logs -f "$service"
             ;;
         *)
             echo "Usage: $0 $service [start|stop|restart|logs]"

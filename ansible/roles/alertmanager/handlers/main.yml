@@ -1,0 +1,21 @@
+---
+- name: restart alertmanager
+  command: docker compose -p alertmanager -f {{ alertmanager_base_dir }}/docker-compose.yml restart
+  args:
+    chdir: "{{ alertmanager_base_dir }}"
+
+- name: stop alertmanager
+  command: docker compose -p alertmanager -f {{ alertmanager_base_dir }}/docker-compose.yml down
+  args:
+    chdir: "{{ alertmanager_base_dir }}"
+
+- name: start alertmanager
+  command: docker compose -p alertmanager -f {{ alertmanager_base_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ alertmanager_base_dir }}"
+
+- name: reload alertmanager
+  uri:
+    url: "http://localhost:{{ alertmanager_port }}/-/reload"
+    method: POST
+  ignore_errors: yes

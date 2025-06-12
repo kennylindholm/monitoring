@@ -1,0 +1,181 @@
+---
+- name: Install Docker prerequisites
+  package:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - python3-pip
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Install Docker prerequisites (RedHat)
+  package:
+    name:
+      - yum-utils
+      - device-mapper-persistent-data
+      - lvm2
+      - python3-pip
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Install Docker Python SDK
+  pip:
+    name:
+      - docker
+      - docker-compose
+    state: present
+
+- name: Ensure Docker is installed and running
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Create monitoring base directory
+  file:
+    path: "{{ monitoring_base_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+
+- name: Create monitoring network
+  docker_network:
+    name: "{{ monitoring_network_name }}"
+    driver: bridge
+    ipam_config:
+      - subnet: "{{ monitoring_network_subnet }}"
+        gateway: "{{ monitoring_network_gateway }}"
+    state: present
+  when: monitoring_create_network
+
+- name: Create monitoring user
+  user:
+    name: "{{ monitoring_user }}"
+    system: yes
+    shell: /usr/sbin/nologin
+    home: "{{ monitoring_base_dir }}"
+    createhome: no
+    state: present
+  when: monitoring_create_user
+
+- name: Set up log rotation for monitoring services
+  template:
+    src: logrotate.j2
+    dest: /etc/logrotate.d/monitoring
+    owner: root
+    group: root
+    mode: "0644"
+  when: monitoring_enable_logrotate
+
+- name: Create monitoring backup directory
+  file:
+    path: "{{ monitoring_backup_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  when: monitoring_enable_backup
+
+- name: Install monitoring backup script
+  template:
+    src: backup-monitoring.sh.j2
+    dest: "{{ monitoring_base_dir }}/backup-monitoring.sh"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  when: monitoring_enable_backup
+
+- name: Set up monitoring backup cron job
+  cron:
+    name: "Monitoring stack backup"
+    job: "{{ monitoring_base_dir }}/backup-monitoring.sh"
+    hour: "{{ monitoring_backup_hour }}"
+    minute: "{{ monitoring_backup_minute }}"
+    state: present
+  when: monitoring_enable_backup
+
+- name: Create SSL certificates directory
+  file:
+    path: "{{ monitoring_ssl_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  when: monitoring_ssl_enabled
+
+- name: Generate self-signed SSL certificate
+  command: |
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout {{ monitoring_ssl_dir }}/monitoring.key \
+    -out {{ monitoring_ssl_dir }}/monitoring.crt \
+    -subj "/C=US/ST=State/L=City/O=Organization/CN={{ monitoring_domain }}"
+  args:
+    creates: "{{ monitoring_ssl_dir }}/monitoring.crt"
+  when: monitoring_ssl_enabled and monitoring_ssl_self_signed
+
+- name: Set permissions on SSL files
+  file:
+    path: "{{ item }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  loop:
+    - "{{ monitoring_ssl_dir }}/monitoring.crt"
+    - "{{ monitoring_ssl_dir }}/monitoring.key"
+  when: monitoring_ssl_enabled
+
+- name: Create monitoring scripts directory
+  file:
+    path: "{{ monitoring_scripts_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+
+- name: Install monitoring helper scripts
+  template:
+    src: "{{ item }}.j2"
+    dest: "{{ monitoring_scripts_dir }}/{{ item }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  loop:
+    - check-services.sh
+    - restart-service.sh
+    - view-logs.sh
+    - export-metrics.sh
+
+- name: Create monitoring documentation
+  template:
+    src: README.md.j2
+    dest: "{{ monitoring_base_dir }}/README.md"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+
+- name: Set up firewall rules for monitoring services
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ monitoring_firewall_ports }}"
+  when: monitoring_configure_firewall and ansible_os_family == "Debian"
+
+- name: Set up firewall rules for monitoring services (RedHat)
+  firewalld:
+    port: "{{ item }}/tcp"
+    permanent: yes
+    state: enabled
+  loop: "{{ monitoring_firewall_ports }}"
+  when: monitoring_configure_firewall and ansible_os_family == "RedHat"
+  notify: restart firewalld
+
+- name: Reload firewalld
+  systemd:
+    name: firewalld
+    state: reloaded
+  when: monitoring_configure_firewall and ansible_os_family == "RedHat"

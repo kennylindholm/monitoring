@@ -1,0 +1,166 @@
+---
+# Monitoring meta role variables
+
+# Control which components to deploy
+monitoring_deploy_common: true
+monitoring_deploy_prometheus: true
+monitoring_deploy_grafana: true
+monitoring_deploy_loki: true
+monitoring_deploy_alertmanager: true
+monitoring_deploy_node_exporter: true
+monitoring_deploy_cadvisor: true
+monitoring_deploy_promtail: true
+
+# Deployment verification
+monitoring_verify_deployment: true
+monitoring_wait_for_services: true
+
+# Component dependencies
+monitoring_component_dependencies:
+  grafana:
+    - prometheus
+    - loki
+  prometheus:
+    - alertmanager
+  promtail:
+    - loki
+
+# Override component variables from meta role
+# These will take precedence over individual role defaults
+
+# Prometheus overrides
+meta_prometheus_retention: "30d"
+meta_prometheus_scrape_interval: "15s"
+
+# Grafana overrides
+meta_grafana_admin_user: "admin"
+meta_grafana_admin_password: "{{ vault_grafana_admin_password | default('admin123') }}"
+meta_grafana_plugins:
+  - grafana-clock-panel
+  - grafana-simple-json-datasource
+  - grafana-worldmap-panel
+  - grafana-piechart-panel
+  - grafana-polystat-panel
+
+# Loki overrides
+meta_loki_retention_period: "744h"  # 31 days
+
+# Alertmanager overrides
+meta_alertmanager_smtp_enabled: false
+meta_alertmanager_slack_enabled: false
+
+# Node Exporter overrides
+meta_node_exporter_enabled_collectors:
+  - cpu
+  - cpufreq
+  - diskstats
+  - filesystem
+  - loadavg
+  - meminfo
+  - netdev
+  - stat
+  - time
+  - uname
+
+# Component health check timeouts
+monitoring_health_check_timeouts:
+  prometheus: 120
+  grafana: 120
+  loki: 120
+  alertmanager: 120
+  node_exporter: 60
+  cadvisor: 60
+  promtail: 60
+
+# Deployment order (for future enhancements)
+monitoring_deployment_order:
+  - monitoring-common
+  - alertmanager
+  - prometheus
+  - loki
+  - grafana
+  - node-exporter
+  - cadvisor
+  - promtail
+
+# Resource limits for components
+monitoring_resource_limits:
+  prometheus:
+    memory: "2Gi"
+    cpu: "1000m"
+  grafana:
+    memory: "512Mi"
+    cpu: "500m"
+  loki:
+    memory: "1Gi"
+    cpu: "500m"
+  alertmanager:
+    memory: "256Mi"
+    cpu: "250m"
+  node_exporter:
+    memory: "128Mi"
+    cpu: "100m"
+  cadvisor:
+    memory: "256Mi"
+    cpu: "250m"
+  promtail:
+    memory: "256Mi"
+    cpu: "250m"
+
+# Global configuration that applies to all components
+monitoring_global_config:
+  log_level: "info"
+  timezone: "UTC"
+  network_name: "monitoring"
+  restart_policy: "unless-stopped"
+
+# Feature flags
+monitoring_features:
+  enable_ssl: false
+  enable_authentication: false
+  enable_high_availability: false
+  enable_backup: true
+  enable_auto_update: false
+
+# Integration settings
+monitoring_integrations:
+  enable_kubernetes: false
+  enable_docker_swarm: false
+  enable_consul: false
+  enable_etcd: false
+
+# Notification channels
+monitoring_notifications:
+  email:
+    enabled: false
+    smtp_server: ""
+    from_address: ""
+    to_addresses: []
+  slack:
+    enabled: false
+    webhook_url: ""
+    channel: "#monitoring"
+  pagerduty:
+    enabled: false
+    service_key: ""
+  webhook:
+    enabled: false
+    url: ""
+
+# Backup configuration
+monitoring_backup_config:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention_days: 7
+  backup_components:
+    - prometheus
+    - grafana
+    - loki
+    - alertmanager
+
+# Monitoring tags for organizing resources
+monitoring_tags:
+  managed_by: "ansible"
+  stack: "monitoring"
+  version: "1.0.0"
+  environment: "{{ environment | default('production') }}"

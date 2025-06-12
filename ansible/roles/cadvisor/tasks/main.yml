@@ -1,0 +1,85 @@
+---
+- name: Create cAdvisor directories
+  file:
+    path: "{{ cadvisor_base_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+
+- name: Copy Docker Compose file for cAdvisor
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ cadvisor_base_dir }}/docker-compose.yml"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  notify: restart cadvisor
+
+- name: Check if cAdvisor is already running
+  command: docker compose -p cadvisor -f {{ cadvisor_base_dir }}/docker-compose.yml ps -q
+  register: cadvisor_status
+  changed_when: false
+  failed_when: false
+
+- name: Start cAdvisor
+  command: docker compose -p cadvisor -f {{ cadvisor_base_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ cadvisor_base_dir }}"
+  when: cadvisor_status.stdout == ""
+
+- name: Wait for cAdvisor to be ready
+  wait_for:
+    port: "{{ cadvisor_port }}"
+    host: localhost
+    delay: 10
+    timeout: 120
+
+- name: Verify cAdvisor is running
+  uri:
+    url: "http://localhost:{{ cadvisor_port }}/healthz"
+    method: GET
+    status_code: 200
+    timeout: 30
+  register: cadvisor_health
+  retries: 5
+  delay: 10
+
+- name: Check cAdvisor metrics endpoint
+  uri:
+    url: "http://localhost:{{ cadvisor_port }}/metrics"
+    method: GET
+    status_code: 200
+  register: cadvisor_metrics
+  failed_when: false
+
+- name: Verify container metrics are present
+  assert:
+    that:
+      - "'container_cpu_usage_seconds_total' in cadvisor_metrics.content"
+      - "'container_memory_usage_bytes' in cadvisor_metrics.content"
+      - "'container_network_receive_bytes_total' in cadvisor_metrics.content"
+    fail_msg: "cAdvisor is not collecting expected container metrics"
+    success_msg: "cAdvisor is collecting container metrics successfully"
+  when: cadvisor_metrics is defined and cadvisor_metrics.content is defined
+
+- name: Display cAdvisor URL
+  debug:
+    msg: |
+      cAdvisor deployed successfully!
+
+      Service is available at:
+      - cAdvisor Web UI: http://{{ ansible_default_ipv4.address }}:{{ cadvisor_port }}
+      - Metrics endpoint: http://{{ ansible_default_ipv4.address }}:{{ cadvisor_port }}/metrics
+
+      Key metrics being collected:
+      - Container CPU usage (container_cpu_usage_seconds_total)
+      - Container Memory usage (container_memory_usage_bytes)
+      - Container Network I/O (container_network_*)
+      - Container Filesystem usage (container_fs_*)
+      - Container labels and metadata
+
+      To add this to Prometheus, use the following scrape config:
+        - job_name: 'cadvisor'
+          static_configs:
+            - targets: ['{{ ansible_default_ipv4.address }}:{{ cadvisor_port }}']

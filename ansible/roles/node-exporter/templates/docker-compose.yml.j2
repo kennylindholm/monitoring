@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  node-exporter:
+    image: {{ node_exporter_image }}
+    container_name: {{ node_exporter_container_name }}
+    ports:
+      - "{{ node_exporter_port }}:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+{% if node_exporter_textfile_directory %}
+      - {{ node_exporter_base_dir }}/textfile_collector:{{ node_exporter_textfile_directory }}:ro
+{% endif %}
+{% for volume in node_exporter_additional_volumes %}
+      - {{ volume }}
+{% endfor %}
+    command:
+      - '--path.procfs={{ node_exporter_path_procfs }}'
+      - '--path.sysfs={{ node_exporter_path_sysfs }}'
+      - '--path.rootfs={{ node_exporter_path_rootfs }}'
+{% if node_exporter_filesystem_mount_points_exclude %}
+      - '--collector.filesystem.mount-points-exclude={{ node_exporter_filesystem_mount_points_exclude }}'
+{% endif %}
+{% if node_exporter_filesystem_fs_types_exclude %}
+      - '--collector.filesystem.fs-types-exclude={{ node_exporter_filesystem_fs_types_exclude }}'
+{% endif %}
+{% if node_exporter_netdev_device_exclude %}
+      - '--collector.netdev.device-exclude={{ node_exporter_netdev_device_exclude }}'
+{% endif %}
+{% if node_exporter_netclass_ignored_devices %}
+      - '--collector.netclass.ignored-devices={{ node_exporter_netclass_ignored_devices }}'
+{% endif %}
+      - '--web.listen-address={{ node_exporter_web_listen_address }}'
+      - '--web.telemetry-path={{ node_exporter_web_telemetry_path }}'
+{% if node_exporter_web_disable_exporter_metrics %}
+      - '--web.disable-exporter-metrics'
+{% endif %}
+      - '--web.max-requests={{ node_exporter_web_max_requests }}'
+{% if node_exporter_textfile_directory %}
+      - '--collector.textfile.directory={{ node_exporter_textfile_directory }}'
+{% endif %}
+{% for collector in node_exporter_disabled_collectors %}
+      - '--no-collector.{{ collector }}'
+{% endfor %}
+      - '--log.level={{ node_exporter_log_level }}'
+      - '--log.format={{ node_exporter_log_format }}'
+    restart: {{ node_exporter_restart_policy }}
+{% if node_exporter_privileged %}
+    privileged: true
+{% endif %}
+{% if node_exporter_pid_mode %}
+    pid: {{ node_exporter_pid_mode }}
+{% endif %}
+{% if node_exporter_security_opt %}
+    security_opt:
+{% for opt in node_exporter_security_opt %}
+      - {{ opt }}
+{% endfor %}
+{% endif %}
+{% if node_exporter_network_external %}
+    networks:
+      - {{ node_exporter_network_name }}
+{% endif %}
+{% if node_exporter_env_vars %}
+    environment:
+{% for key, value in node_exporter_env_vars.items() %}
+      - {{ key }}={{ value }}
+{% endfor %}
+{% endif %}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9100{{ node_exporter_web_telemetry_path }}"]
+      interval: {{ node_exporter_healthcheck_interval }}
+      timeout: {{ node_exporter_healthcheck_timeout }}
+      retries: {{ node_exporter_healthcheck_retries }}
+      start_period: {{ node_exporter_healthcheck_start_period }}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+{% if node_exporter_network_external %}
+networks:
+  {{ node_exporter_network_name }}:
+    external: true
+{% endif %}

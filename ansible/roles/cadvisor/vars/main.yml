@@ -1,0 +1,120 @@
+---
+# cAdvisor role variables
+
+# Base directory for cAdvisor
+cadvisor_base_dir: "/opt/monitoring/cadvisor"
+
+# cAdvisor service configuration
+cadvisor_port: 8080
+cadvisor_image: "gcr.io/cadvisor/cadvisor:latest"
+
+# cAdvisor configuration
+cadvisor_privileged: true
+cadvisor_allow_dynamic_housekeeping: true
+cadvisor_global_housekeeping_interval: "1m0s"
+cadvisor_housekeeping_interval: "10s"
+cadvisor_max_housekeeping_interval: "15s"
+
+# Storage driver
+cadvisor_storage_driver: ""
+cadvisor_storage_driver_db: ""
+cadvisor_storage_driver_host: ""
+cadvisor_storage_driver_password: ""
+cadvisor_storage_driver_secure: false
+cadvisor_storage_driver_table: ""
+cadvisor_storage_driver_user: ""
+
+# Metrics configuration
+cadvisor_disable_metrics: []
+cadvisor_enable_load_reader: true
+cadvisor_profiling: false
+
+# Docker configuration
+cadvisor_docker_endpoint: "unix:///var/run/docker.sock"
+cadvisor_docker_tls: false
+cadvisor_docker_tls_cert: ""
+cadvisor_docker_tls_key: ""
+cadvisor_docker_tls_ca: ""
+
+# Resource limits
+cadvisor_max_procs: 0
+
+# Log configuration
+cadvisor_log_level: 0  # 0=INFO, 1=WARNING, 2=ERROR
+cadvisor_event_storage_age_limit: "default=0"
+cadvisor_event_storage_event_limit: "default=0"
+
+# Application metrics
+cadvisor_application_metrics_count_limit: 100
+
+# Store container labels as Prometheus labels
+cadvisor_store_container_labels: true
+cadvisor_whitelisted_container_labels: []
+
+# Raw cgroup metrics
+cadvisor_raw_cgroup_prefix_whitelist: []
+
+# Network settings
+cadvisor_network_name: "monitoring"
+cadvisor_network_external: true
+
+# Docker specific settings
+cadvisor_container_name: "cadvisor"
+cadvisor_restart_policy: "unless-stopped"
+
+# Volumes to mount
+cadvisor_volumes:
+  - /:/rootfs:ro
+  - /var/run:/var/run:ro
+  - /sys:/sys:ro
+  - /var/lib/docker/:/var/lib/docker:ro
+  - /dev/disk/:/dev/disk:ro
+  - /var/run/docker.sock:/var/run/docker.sock:ro
+  - /etc/machine-id:/etc/machine-id:ro
+
+# Additional volumes (user-defined)
+cadvisor_additional_volumes: []
+
+# Devices to mount
+cadvisor_devices: []
+
+# Environment variables
+cadvisor_env_vars: {}
+
+# Security options
+cadvisor_security_opt: []
+
+# Container capabilities
+cadvisor_cap_add: []
+cadvisor_cap_drop: []
+
+# Health check settings
+cadvisor_healthcheck_interval: "30s"
+cadvisor_healthcheck_timeout: "10s"
+cadvisor_healthcheck_retries: 3
+cadvisor_healthcheck_start_period: "40s"
+
+# UI settings
+cadvisor_ui_enabled: true
+
+# Metric inclusion settings
+cadvisor_enable_metrics:
+  - cpu
+  - cpuLoad
+  - disk
+  - diskIO
+  - memory
+  - network
+  - process
+
+# Container hints
+cadvisor_container_hints: "/etc/cadvisor/container_hints.json"
+
+# Machine ID file path
+cadvisor_machine_id_file: "/etc/machine-id"
+
+# Boot ID file path
+cadvisor_boot_id_file: "/proc/sys/kernel/random/boot_id"
+
+# CPU sets
+cadvisor_update_machine_info_interval: 10

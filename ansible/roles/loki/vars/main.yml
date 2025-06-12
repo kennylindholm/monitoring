@@ -1,0 +1,115 @@
+---
+# Loki role variables
+
+# Base directory for Loki
+loki_base_dir: "/opt/monitoring/loki"
+
+# Loki service configuration
+loki_port: 3100
+loki_image: "grafana/loki:latest"
+
+# Loki user/group IDs (matching the official image)
+loki_user_id: "10001"
+loki_group_id: "10001"
+
+# Loki configuration
+loki_retention_period: "744h"  # 31 days
+loki_retention_delete_delay: "2h"
+loki_retention_delete_worker_count: 150
+
+# Storage configuration
+loki_storage_type: "filesystem"  # filesystem or s3
+loki_storage_path: "/loki"
+
+# S3 storage configuration (if using S3)
+loki_s3_endpoint: ""
+loki_s3_bucket_name: ""
+loki_s3_access_key_id: ""
+loki_s3_secret_access_key: ""
+loki_s3_insecure: false
+loki_s3_force_path_style: true
+
+# Ingester configuration
+loki_ingester_chunk_idle_period: "30m"
+loki_ingester_max_chunk_age: "1h"
+loki_ingester_chunk_target_size: 1048576
+loki_ingester_chunk_retain_period: "30s"
+loki_ingester_max_transfer_retries: 0
+
+# Query configuration
+loki_query_timeout: "1m"
+loki_query_max_look_back: "0s"
+loki_query_ingester_within: "3h"
+
+# Limits configuration
+loki_limits_enforce_metric_name: false
+loki_limits_reject_old_samples: true
+loki_limits_reject_old_samples_max_age: "168h"
+loki_limits_ingestion_rate_mb: 4
+loki_limits_ingestion_burst_size_mb: 6
+loki_limits_max_entries_limit_per_query: 5000
+loki_limits_max_streams_per_user: 0
+loki_limits_max_global_streams_per_user: 5000
+
+# Table manager configuration
+loki_table_manager_retention_deletes_enabled: false
+loki_table_manager_retention_period: "0s"
+
+# Compactor configuration
+loki_compactor_working_directory: "/loki/compactor"
+loki_compactor_shared_store: "filesystem"
+loki_compactor_compaction_interval: "10m"
+loki_compactor_retention_enabled: true
+loki_compactor_retention_delete_delay: "2h"
+loki_compactor_retention_delete_worker_count: 150
+
+# Frontend configuration
+loki_frontend_compress_responses: true
+loki_frontend_max_outstanding_per_tenant: 2048
+loki_frontend_log_queries_longer_than: "5s"
+
+# Ruler configuration
+loki_ruler_enable_api: true
+loki_ruler_enable_alertmanager_v2: true
+loki_ruler_alertmanager_url: "http://alertmanager:9093"
+loki_ruler_storage_type: "local"
+loki_ruler_storage_local_directory: "/loki/rules"
+
+# Network settings
+loki_network_name: "monitoring"
+loki_network_external: true
+
+# Performance tuning
+loki_grpc_server_max_recv_msg_size: 104857600  # 100MB
+loki_grpc_server_max_send_msg_size: 104857600  # 100MB
+loki_grpc_server_max_concurrent_streams: 1000
+
+# Ring configuration
+loki_ring_kvstore_store: "inmemory"
+loki_ring_replication_factor: 1
+
+# Schema configuration
+loki_schema_configs:
+  - from: "2020-10-24"
+    store: "boltdb-shipper"
+    object_store: "filesystem"
+    schema: "v11"
+    index:
+      prefix: "index_"
+      period: "24h"
+
+# Additional configuration
+loki_auth_enabled: false
+loki_server_http_listen_port: 3100
+loki_server_grpc_listen_port: 9096
+loki_server_log_level: "info"
+
+# Docker specific settings
+loki_container_name: "loki"
+loki_restart_policy: "unless-stopped"
+
+# Health check settings
+loki_healthcheck_interval: "30s"
+loki_healthcheck_timeout: "10s"
+loki_healthcheck_retries: 3
+loki_healthcheck_start_period: "40s"

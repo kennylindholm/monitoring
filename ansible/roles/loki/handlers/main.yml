@@ -1,0 +1,19 @@
+---
+- name: restart loki
+  command: docker compose -p loki -f {{ loki_base_dir }}/docker-compose.yml restart
+  args:
+    chdir: "{{ loki_base_dir }}"
+
+- name: stop loki
+  command: docker compose -p loki -f {{ loki_base_dir }}/docker-compose.yml down
+  args:
+    chdir: "{{ loki_base_dir }}"
+
+- name: start loki
+  command: docker compose -p loki -f {{ loki_base_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ loki_base_dir }}"
+
+- name: reload loki
+  command: docker exec loki kill -HUP 1
+  ignore_errors: yes

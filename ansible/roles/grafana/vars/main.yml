@@ -1,0 +1,126 @@
+---
+# Grafana role variables
+
+# Base directory for Grafana
+grafana_base_dir: "/opt/monitoring/grafana"
+
+# Grafana service configuration
+grafana_port: 3000
+grafana_image: "grafana/grafana:latest"
+
+# Grafana user/group IDs (matching the official image)
+grafana_user_id: "472"
+grafana_group_id: "0"
+
+# Grafana admin credentials
+grafana_admin_user: admin
+grafana_admin_password: "admin123"
+
+# Grafana configuration
+grafana_domain: localhost
+grafana_root_url: "http://{{ grafana_domain }}:{{ grafana_port }}"
+
+# Security settings
+grafana_allow_sign_up: false
+grafana_anonymous_enabled: false
+grafana_anonymous_org_name: "Main Org."
+grafana_anonymous_org_role: "Viewer"
+
+# SMTP configuration (for alerts)
+grafana_smtp_enabled: false
+grafana_smtp_host: ""
+grafana_smtp_user: ""
+grafana_smtp_password: ""
+grafana_smtp_from_address: ""
+grafana_smtp_from_name: "Grafana"
+
+# Default plugins to install
+grafana_plugins:
+  - grafana-clock-panel
+  - grafana-simple-json-datasource
+  - grafana-worldmap-panel
+  - grafana-piechart-panel
+
+# Additional plugins (user-defined)
+grafana_additional_plugins: []
+
+# Feature toggles
+grafana_feature_toggles:
+  - ngalert
+
+# Provisioning
+grafana_provision_dashboards: true
+grafana_provision_datasources: true
+
+# Data sources configuration
+grafana_datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: "http://prometheus:9090"
+    isDefault: true
+    jsonData:
+      timeInterval: "15s"
+  - name: Loki
+    type: loki
+    access: proxy
+    url: "http://loki:3100"
+    jsonData:
+      maxLines: 1000
+
+# Additional datasources (user-defined)
+grafana_additional_datasources: []
+
+# Dashboard provisioning paths
+grafana_dashboard_provider_name: "Default"
+grafana_dashboard_provider_orgid: 1
+grafana_dashboard_provider_folder: ""
+grafana_dashboard_provider_type: "file"
+grafana_dashboard_provider_disableDelete: false
+grafana_dashboard_provider_updateIntervalSeconds: 10
+grafana_dashboard_provider_allowUiUpdates: true
+
+# Organizations to create
+grafana_organizations: []
+# Example:
+# grafana_organizations:
+#   - name: "Development Team"
+#   - name: "Operations Team"
+
+# Users to create
+grafana_users: []
+# Example:
+# grafana_users:
+#   - name: "John Doe"
+#     email: "john@example.com"
+#     login: "john"
+#     password: "secure_password"
+#     orgId: 1
+
+# Network settings
+grafana_network_name: "monitoring"
+grafana_network_external: true
+
+# Storage settings
+grafana_storage_size: "2GB"
+
+# Grafana environment variables
+grafana_env_vars:
+  GF_INSTALL_PLUGINS: "{{ grafana_plugins | join(',') }}"
+  GF_SECURITY_ADMIN_USER: "{{ grafana_admin_user }}"
+  GF_SECURITY_ADMIN_PASSWORD: "{{ grafana_admin_password }}"
+  GF_USERS_ALLOW_SIGN_UP: "{{ grafana_allow_sign_up | lower }}"
+  GF_SERVER_DOMAIN: "{{ grafana_domain }}"
+  GF_SERVER_ROOT_URL: "{{ grafana_root_url }}"
+  GF_SMTP_ENABLED: "{{ grafana_smtp_enabled | lower }}"
+  GF_AUTH_ANONYMOUS_ENABLED: "{{ grafana_anonymous_enabled | lower }}"
+  GF_AUTH_ANONYMOUS_ORG_NAME: "{{ grafana_anonymous_org_name }}"
+  GF_AUTH_ANONYMOUS_ORG_ROLE: "{{ grafana_anonymous_org_role }}"
+  GF_FEATURE_TOGGLES_ENABLE: "{{ grafana_feature_toggles | join(',') }}"
+
+# Additional environment variables (user-defined)
+grafana_additional_env_vars: {}
+
+# Logging configuration
+grafana_log_level: "info"
+grafana_log_mode: "console"

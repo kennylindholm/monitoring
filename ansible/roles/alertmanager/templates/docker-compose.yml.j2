@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  alertmanager:
+    image: {{ alertmanager_image }}
+    container_name: {{ alertmanager_container_name }}
+    user: "{{ alertmanager_user_id }}:{{ alertmanager_group_id }}"
+    ports:
+      - "{{ alertmanager_port }}:9093"
+{% if alertmanager_cluster_enabled %}
+      - "{{ alertmanager_cluster_listen_address.split(':')[1] }}:{{ alertmanager_cluster_listen_address.split(':')[1] }}"
+{% endif %}
+    volumes:
+      - ./configs/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./data:{{ alertmanager_storage_path }}
+{% if alertmanager_templates_enabled %}
+      - ./templates:/etc/alertmanager/templates:ro
+{% endif %}
+{% if alertmanager_webhook_receivers | length > 0 %}
+      - ./webhooks:/etc/alertmanager/webhooks:ro
+{% endif %}
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path={{ alertmanager_storage_path }}'
+      - '--data.retention={{ alertmanager_retention }}'
+      - '--web.external-url={{ alertmanager_external_url }}'
+      - '--web.route-prefix={{ alertmanager_route_prefix }}'
+      - '--web.listen-address={{ alertmanager_web_listen_address }}'
+      - '--log.level={{ alertmanager_log_level }}'
+      - '--log.format={{ alertmanager_log_format }}'
+{% if alertmanager_cluster_enabled %}
+      - '--cluster.listen-address={{ alertmanager_cluster_listen_address }}'
+{% if alertmanager_cluster_advertise_address %}
+      - '--cluster.advertise-address={{ alertmanager_cluster_advertise_address }}'
+{% endif %}
+{% for peer in alertmanager_cluster_peers %}
+      - '--cluster.peer={{ peer }}'
+{% endfor %}
+{% endif %}
+    restart: {{ alertmanager_restart_policy }}
+{% if alertmanager_network_external %}
+    networks:
+      - {{ alertmanager_network_name }}
+{% endif %}
+    environment:
+      - TZ=${TZ:-UTC}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/ready"]
+      interval: {{ alertmanager_healthcheck_interval }}
+      timeout: {{ alertmanager_healthcheck_timeout }}
+      retries: {{ alertmanager_healthcheck_retries }}
+      start_period: {{ alertmanager_healthcheck_start_period }}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+{% if alertmanager_network_external %}
+networks:
+  {{ alertmanager_network_name }}:
+    external: true
+{% endif %}

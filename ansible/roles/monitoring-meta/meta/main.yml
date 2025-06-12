@@ -1,0 +1,87 @@
+---
+dependencies:
+  - role: monitoring-common
+    when: monitoring_deploy_common | default(true)
+
+  - role: prometheus
+    when: monitoring_deploy_prometheus | default(true)
+    vars:
+      prometheus_retention: "{{ meta_prometheus_retention | default(prometheus_retention) }}"
+      prometheus_scrape_interval: "{{ meta_prometheus_scrape_interval | default(prometheus_scrape_interval) }}"
+      prometheus_network_name: "{{ monitoring_global_config.network_name | default('monitoring') }}"
+      prometheus_network_external: true
+
+  - role: alertmanager
+    when: monitoring_deploy_alertmanager | default(true)
+    vars:
+      alertmanager_smtp_enabled: "{{ meta_alertmanager_smtp_enabled | default(alertmanager_smtp_enabled) }}"
+      alertmanager_slack_enabled: "{{ meta_alertmanager_slack_enabled | default(alertmanager_slack_enabled) }}"
+      alertmanager_network_name: "{{ monitoring_global_config.network_name | default('monitoring') }}"
+      alertmanager_network_external: true
+
+  - role: loki
+    when: monitoring_deploy_loki | default(true)
+    vars:
+      loki_retention_period: "{{ meta_loki_retention_period | default(loki_retention_period) }}"
+      loki_network_name: "{{ monitoring_global_config.network_name | default('monitoring') }}"
+      loki_network_external: true
+
+  - role: grafana
+    when: monitoring_deploy_grafana | default(true)
+    vars:
+      grafana_admin_user: "{{ meta_grafana_admin_user | default(grafana_admin_user) }}"
+      grafana_admin_password: "{{ meta_grafana_admin_password | default(grafana_admin_password) }}"
+      grafana_plugins: "{{ meta_grafana_plugins | default(grafana_plugins) }}"
+      grafana_network_name: "{{ monitoring_global_config.network_name | default('monitoring') }}"
+      grafana_network_external: true
+
+  - role: node-exporter
+    when: monitoring_deploy_node_exporter | default(true)
+    vars:
+      node_exporter_enabled_collectors: "{{ meta_node_exporter_enabled_collectors | default(node_exporter_enabled_collectors) }}"
+      node_exporter_network_name: "{{ monitoring_global_config.network_name | default('monitoring') }}"
+      node_exporter_network_external: true
+
+  - role: cadvisor
+    when: monitoring_deploy_cadvisor | default(true)
+    vars:
+      cadvisor_network_name: "{{ monitoring_global_config.network_name | default('monitoring') }}"
+      cadvisor_network_external: true
+
+  - role: promtail
+    when: monitoring_deploy_promtail | default(true)
+    vars:
+      promtail_loki_url: "http://loki:3100/loki/api/v1/push"
+      promtail_network_name: "{{ monitoring_global_config.network_name | default('monitoring') }}"
+      promtail_network_external: true
+
+galaxy_info:
+  author: monitoring-team
+  description: Meta role for deploying complete monitoring stack
+  company: Example Corp
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - buster
+        - bullseye
+    - name: EL
+      versions:
+        - "7"
+        - "8"
+        - "9"
+  galaxy_tags:
+    - monitoring
+    - prometheus
+    - grafana
+    - loki
+    - alertmanager
+    - observability
+    - metrics
+    - logs
+    - alerts

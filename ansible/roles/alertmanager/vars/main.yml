@@ -1,0 +1,154 @@
+---
+# Alertmanager role variables
+
+# Base directory for Alertmanager
+alertmanager_base_dir: "/opt/monitoring/alertmanager"
+
+# Alertmanager service configuration
+alertmanager_port: 9093
+alertmanager_image: "prom/alertmanager:latest"
+
+# Alertmanager user/group IDs (matching the official image)
+alertmanager_user_id: "65534"
+alertmanager_group_id: "65534"
+
+# Alertmanager configuration
+alertmanager_external_url: "http://localhost:{{ alertmanager_port }}"
+alertmanager_route_prefix: "/"
+
+# Clustering configuration
+alertmanager_cluster_enabled: false
+alertmanager_cluster_listen_address: "0.0.0.0:9094"
+alertmanager_cluster_advertise_address: ""
+alertmanager_cluster_peers: []
+
+# Global configuration
+alertmanager_resolve_timeout: "5m"
+
+# SMTP configuration
+alertmanager_smtp_enabled: false
+alertmanager_smtp_smarthost: "localhost:25"
+alertmanager_smtp_from: "alertmanager@example.com"
+alertmanager_smtp_auth_username: ""
+alertmanager_smtp_auth_password: ""
+alertmanager_smtp_auth_secret: ""
+alertmanager_smtp_auth_identity: ""
+alertmanager_smtp_require_tls: true
+
+# Slack configuration
+alertmanager_slack_enabled: false
+alertmanager_slack_api_url: ""
+alertmanager_slack_channel: "#alerts"
+alertmanager_slack_username: "Alertmanager"
+alertmanager_slack_icon_emoji: ":warning:"
+alertmanager_slack_icon_url: ""
+
+# PagerDuty configuration
+alertmanager_pagerduty_enabled: false
+alertmanager_pagerduty_url: "https://events.pagerduty.com/v2/enqueue"
+alertmanager_pagerduty_service_key: ""
+alertmanager_pagerduty_client: "Alertmanager"
+alertmanager_pagerduty_client_url: ""
+
+# OpsGenie configuration
+alertmanager_opsgenie_enabled: false
+alertmanager_opsgenie_api_key: ""
+alertmanager_opsgenie_api_url: "https://api.opsgenie.com/"
+
+# Webhook configuration
+alertmanager_webhook_enabled: false
+alertmanager_webhook_url: ""
+alertmanager_webhook_max_alerts: 0
+
+# Default route configuration
+alertmanager_route_group_by: ['alertname', 'cluster', 'service']
+alertmanager_route_group_wait: "10s"
+alertmanager_route_group_interval: "10s"
+alertmanager_route_repeat_interval: "1h"
+alertmanager_route_receiver: "default"
+
+# Routes configuration
+alertmanager_routes: []
+# Example:
+# alertmanager_routes:
+#   - match:
+#       severity: critical
+#     receiver: pagerduty
+#   - match_re:
+#       service: ^(foo|bar)$
+#     receiver: slack
+
+# Receivers configuration
+alertmanager_receivers:
+  - name: 'default'
+    email_configs: []
+    slack_configs: []
+    pagerduty_configs: []
+    webhook_configs: []
+
+# Additional custom receivers
+alertmanager_custom_receivers: []
+
+# Inhibit rules
+alertmanager_inhibit_rules: []
+# Example:
+# alertmanager_inhibit_rules:
+#   - source_match:
+#       severity: 'critical'
+#     target_match:
+#       severity: 'warning'
+#     equal: ['alertname', 'cluster', 'service']
+
+# Templates
+alertmanager_templates_enabled: false
+alertmanager_templates: []
+
+# Network settings
+alertmanager_network_name: "monitoring"
+alertmanager_network_external: true
+
+# Storage settings
+alertmanager_storage_path: "/alertmanager"
+alertmanager_retention: "120h"
+
+# Web configuration
+alertmanager_web_external_url: ""
+alertmanager_web_route_prefix: "/"
+alertmanager_web_listen_address: ":9093"
+
+# Log configuration
+alertmanager_log_level: "info"
+alertmanager_log_format: "logfmt"
+
+# Docker specific settings
+alertmanager_container_name: "alertmanager"
+alertmanager_restart_policy: "unless-stopped"
+
+# Health check settings
+alertmanager_healthcheck_interval: "30s"
+alertmanager_healthcheck_timeout: "10s"
+alertmanager_healthcheck_retries: 3
+alertmanager_healthcheck_start_period: "40s"
+
+# Custom webhook receivers
+alertmanager_webhook_receivers: []
+# Example:
+# alertmanager_webhook_receivers:
+#   - name: "custom-webhook"
+#     url: "http://example.com/webhook"
+#     http_method: "POST"
+#     max_alerts: 10
+
+# Email configuration defaults
+alertmanager_email_to: ""
+alertmanager_email_headers: {}
+alertmanager_email_html: ""
+alertmanager_email_text: ""
+
+# Mute time intervals
+alertmanager_mute_time_intervals: []
+# Example:
+# alertmanager_mute_time_intervals:
+#   - name: weekends
+#     time_intervals:
+#       - weekdays: ['saturday', 'sunday']

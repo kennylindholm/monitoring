@@ -1,0 +1,120 @@
+---
+- name: Create Alertmanager directories
+  file:
+    path: "{{ alertmanager_base_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ alertmanager_user_id }}"
+    group: "{{ alertmanager_group_id }}"
+    mode: "0755"
+  loop:
+    - data
+    - configs
+
+- name: Copy Alertmanager configuration
+  template:
+    src: alertmanager.yml.j2
+    dest: "{{ alertmanager_base_dir }}/configs/alertmanager.yml"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  notify: restart alertmanager
+
+- name: Validate Alertmanager configuration
+  command: >
+    docker run --rm
+    -v {{ alertmanager_base_dir }}/configs/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    --entrypoint amtool
+    {{ alertmanager_image }}
+    check-config /etc/alertmanager/alertmanager.yml
+  register: alertmanager_config_check
+  failed_when: alertmanager_config_check.rc != 0
+  changed_when: false
+
+- name: Display Alertmanager config validation result
+  debug:
+    msg: "Alertmanager config validation: {{ alertmanager_config_check.stdout }}"
+
+- name: Copy Docker Compose file for Alertmanager
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ alertmanager_base_dir }}/docker-compose.yml"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  notify: restart alertmanager
+
+- name: Check if Alertmanager is already running
+  command: docker compose -p alertmanager -f {{ alertmanager_base_dir }}/docker-compose.yml ps -q
+  register: alertmanager_status
+  changed_when: false
+  failed_when: false
+
+- name: Start Alertmanager
+  command: docker compose -p alertmanager -f {{ alertmanager_base_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ alertmanager_base_dir }}"
+  when: alertmanager_status.stdout == ""
+
+- name: Wait for Alertmanager to be ready
+  wait_for:
+    port: "{{ alertmanager_port }}"
+    host: localhost
+    delay: 10
+    timeout: 120
+
+- name: Verify Alertmanager is running
+  uri:
+    url: "http://localhost:{{ alertmanager_port }}/-/ready"
+    method: GET
+    status_code: 200
+    timeout: 30
+  register: alertmanager_health
+  retries: 5
+  delay: 10
+
+- name: Check Alertmanager cluster status
+  uri:
+    url: "http://localhost:{{ alertmanager_port }}/api/v2/status"
+    method: GET
+    status_code: 200
+    timeout: 30
+  register: alertmanager_cluster_status
+
+- name: Display cluster status
+  debug:
+    msg: "Alertmanager cluster status: {{ alertmanager_cluster_status.json }}"
+  when: alertmanager_cluster_status is defined
+
+- name: Create webhook receivers directory
+  file:
+    path: "{{ alertmanager_base_dir }}/webhooks"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  when: alertmanager_webhook_receivers | length > 0
+
+- name: Copy webhook receiver scripts
+  template:
+    src: "webhook-{{ item.name }}.sh.j2"
+    dest: "{{ alertmanager_base_dir }}/webhooks/{{ item.name }}.sh"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  loop: "{{ alertmanager_webhook_receivers }}"
+  when: alertmanager_webhook_receivers | length > 0
+
+- name: Display Alertmanager URL
+  debug:
+    msg: |
+      Alertmanager deployed successfully!
+
+      Service is available at:
+      - Alertmanager: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}
+
+      API endpoints:
+      - Status: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}/api/v2/status
+      - Alerts: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}/api/v2/alerts
+      - Silences: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}/api/v2/silences
+
+      Data is persisted in: {{ alertmanager_base_dir }}

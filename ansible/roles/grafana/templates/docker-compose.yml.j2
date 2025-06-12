@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  grafana:
+    image: {{ grafana_image }}
+    container_name: grafana
+    user: "{{ grafana_user_id }}:{{ grafana_group_id }}"
+    ports:
+      - "{{ grafana_port }}:3000"
+    volumes:
+      - ./data:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning:ro
+    environment:
+{% for key, value in grafana_env_vars.items() %}
+      - {{ key }}={{ value }}
+{% endfor %}
+{% for key, value in grafana_additional_env_vars.items() %}
+      - {{ key }}={{ value }}
+{% endfor %}
+    restart: unless-stopped
+{% if grafana_network_external %}
+    networks:
+      - {{ grafana_network_name }}
+{% endif %}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+{% if grafana_network_external %}
+networks:
+  {{ grafana_network_name }}:
+    external: true
+{% endif %}

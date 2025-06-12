@@ -1,0 +1,137 @@
+---
+# Common monitoring variables shared across all monitoring roles
+
+# Base directory for all monitoring services
+monitoring_base_dir: "/opt/monitoring"
+
+# Monitoring network configuration
+monitoring_network_name: "monitoring"
+monitoring_create_network: true
+monitoring_network_subnet: "172.20.0.0/16"
+monitoring_network_gateway: "172.20.0.1"
+
+# Common user for monitoring services
+monitoring_user: "monitoring"
+monitoring_create_user: false
+
+# Domain configuration
+monitoring_domain: "{{ ansible_default_ipv4.address }}"
+
+# SSL/TLS configuration
+monitoring_ssl_enabled: false
+monitoring_ssl_self_signed: true
+monitoring_ssl_dir: "{{ monitoring_base_dir }}/ssl"
+monitoring_ssl_cert_file: "{{ monitoring_ssl_dir }}/monitoring.crt"
+monitoring_ssl_key_file: "{{ monitoring_ssl_dir }}/monitoring.key"
+
+# Backup configuration
+monitoring_enable_backup: true
+monitoring_backup_dir: "{{ monitoring_base_dir }}/backups"
+monitoring_backup_retention_days: 7
+monitoring_backup_hour: "2"
+monitoring_backup_minute: "0"
+
+# Log rotation
+monitoring_enable_logrotate: true
+monitoring_log_retention_days: 30
+monitoring_log_max_size: "100M"
+
+# Scripts directory
+monitoring_scripts_dir: "{{ monitoring_base_dir }}/scripts"
+
+# Firewall configuration
+monitoring_configure_firewall: false
+monitoring_firewall_ports:
+  - "9090"  # Prometheus
+  - "3000"  # Grafana
+  - "3100"  # Loki
+  - "9093"  # Alertmanager
+  - "9100"  # Node Exporter
+  - "8080"  # cAdvisor
+  - "9080"  # Promtail
+
+# Default resource limits
+monitoring_default_memory_limit: "512M"
+monitoring_default_cpu_limit: "1.0"
+
+# Common labels for all services
+monitoring_common_labels:
+  environment: "{{ environment | default('production') }}"
+  managed_by: "ansible"
+  stack: "monitoring"
+
+# Service discovery
+monitoring_enable_service_discovery: true
+monitoring_consul_endpoint: ""
+monitoring_etcd_endpoint: ""
+
+# High availability settings
+monitoring_ha_enabled: false
+monitoring_ha_replicas: 2
+
+# Storage settings
+monitoring_storage_driver: "local"
+monitoring_storage_path: "{{ monitoring_base_dir }}/data"
+
+# Performance tuning
+monitoring_enable_performance_tuning: true
+monitoring_max_open_files: 65536
+monitoring_max_processes: 32768
+
+# Security settings
+monitoring_enable_basic_auth: false
+monitoring_enable_oauth: false
+monitoring_oauth_provider: ""
+monitoring_oauth_client_id: ""
+monitoring_oauth_client_secret: ""
+
+# Notification settings
+monitoring_notification_email: ""
+monitoring_notification_slack_webhook: ""
+monitoring_notification_pagerduty_key: ""
+
+# Update settings
+monitoring_auto_update: false
+monitoring_update_schedule: "0 4 * * 0"  # Weekly on Sunday at 4 AM
+
+# Docker registry settings
+monitoring_docker_registry: ""
+monitoring_docker_registry_username: ""
+monitoring_docker_registry_password: ""
+
+# Proxy settings
+monitoring_http_proxy: ""
+monitoring_https_proxy: ""
+monitoring_no_proxy: "localhost,127.0.0.1,{{ monitoring_network_subnet }}"
+
+# DNS settings
+monitoring_dns_servers: []
+monitoring_search_domains: []
+
+# Time zone
+monitoring_timezone: "UTC"
+
+# Debugging
+monitoring_debug_enabled: false
+monitoring_debug_level: "info"
+
+# Health check settings
+monitoring_healthcheck_enabled: true
+monitoring_healthcheck_interval: "30s"
+monitoring_healthcheck_timeout: "10s"
+monitoring_healthcheck_retries: 3
+
+# Resource monitoring
+monitoring_enable_resource_monitoring: true
+monitoring_resource_alert_threshold_cpu: 80
+monitoring_resource_alert_threshold_memory: 85
+monitoring_resource_alert_threshold_disk: 90
+
+# Service dependencies
+monitoring_wait_for_services: true
+monitoring_service_start_delay: 10
+monitoring_service_start_timeout: 300
+
+# Maintenance mode
+monitoring_maintenance_mode: false
+monitoring_maintenance_message: "Monitoring stack is under maintenance"

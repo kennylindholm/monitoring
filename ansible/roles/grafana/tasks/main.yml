@@ -1,0 +1,151 @@
+---
+- name: Create Grafana directories
+  file:
+    path: "{{ grafana_base_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ grafana_user_id }}"
+    group: "{{ grafana_group_id }}"
+    mode: "0755"
+  loop:
+    - data
+    - provisioning/datasources
+    - provisioning/dashboards
+    - provisioning/dashboards/json
+
+- name: Copy Grafana datasource provisioning
+  template:
+    src: datasources.yml.j2
+    dest: "{{ grafana_base_dir }}/provisioning/datasources/datasources.yml"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  notify: restart grafana
+
+- name: Copy Grafana dashboard provisioning
+  template:
+    src: dashboards.yml.j2
+    dest: "{{ grafana_base_dir }}/provisioning/dashboards/dashboards.yml"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  notify: restart grafana
+
+- name: Copy default dashboards
+  copy:
+    src: "{{ item }}"
+    dest: "{{ grafana_base_dir }}/provisioning/dashboards/json/"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  with_fileglob:
+    - "files/dashboards/*.json"
+  when: grafana_provision_dashboards
+  notify: restart grafana
+
+- name: Copy Docker Compose file for Grafana
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ grafana_base_dir }}/docker-compose.yml"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  notify: restart grafana
+
+- name: Check if Grafana is already running
+  command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml ps -q
+  register: grafana_status
+  changed_when: false
+  failed_when: false
+
+- name: Start Grafana
+  command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ grafana_base_dir }}"
+  when: grafana_status.stdout == ""
+
+- name: Wait for Grafana to be ready
+  wait_for:
+    port: "{{ grafana_port }}"
+    host: localhost
+    delay: 10
+    timeout: 120
+
+- name: Verify Grafana is running
+  uri:
+    url: "http://localhost:{{ grafana_port }}/api/health"
+    method: GET
+    status_code: 200
+    timeout: 30
+  register: grafana_health
+  retries: 5
+  delay: 10
+
+- name: Wait for Grafana API to be ready
+  uri:
+    url: "http://localhost:{{ grafana_port }}/api/org"
+    method: GET
+    user: "{{ grafana_admin_user }}"
+    password: "{{ grafana_admin_password }}"
+    force_basic_auth: yes
+    status_code: 200
+  register: grafana_api_ready
+  until: grafana_api_ready.status == 200
+  retries: 10
+  delay: 5
+
+- name: Create additional organizations
+  uri:
+    url: "http://localhost:{{ grafana_port }}/api/orgs"
+    method: POST
+    user: "{{ grafana_admin_user }}"
+    password: "{{ grafana_admin_password }}"
+    force_basic_auth: yes
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+    status_code: [200, 409]  # 409 means already exists
+  loop: "{{ grafana_organizations }}"
+  when: grafana_organizations is defined and grafana_organizations | length > 0
+
+- name: Create additional users
+  uri:
+    url: "http://localhost:{{ grafana_port }}/api/admin/users"
+    method: POST
+    user: "{{ grafana_admin_user }}"
+    password: "{{ grafana_admin_password }}"
+    force_basic_auth: yes
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      email: "{{ item.email }}"
+      login: "{{ item.login }}"
+      password: "{{ item.password }}"
+      orgId: "{{ item.orgId | default(1) }}"
+    status_code: [200, 412]  # 412 means user already exists
+  loop: "{{ grafana_users }}"
+  when: grafana_users is defined and grafana_users | length > 0
+  no_log: true
+
+- name: Install additional plugins
+  command: >
+    docker exec grafana
+    grafana-cli plugins install {{ item }}
+  loop: "{{ grafana_additional_plugins }}"
+  when: grafana_additional_plugins is defined and grafana_additional_plugins | length > 0
+  register: plugin_install
+  failed_when: plugin_install.rc != 0 and "already installed" not in plugin_install.stderr
+  changed_when: plugin_install.rc == 0 and "already installed" not in plugin_install.stderr
+
+- name: Display Grafana URL and credentials
+  debug:
+    msg: |
+      Grafana deployed successfully!
+
+      Service is available at:
+      - Grafana: http://{{ ansible_default_ipv4.address }}:{{ grafana_port }}
+
+      Default login credentials:
+      - Username: {{ grafana_admin_user }}
+      - Password: {{ grafana_admin_password }}
+
+      Data is persisted in: {{ grafana_base_dir }}

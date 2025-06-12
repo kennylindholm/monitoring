@@ -1,37 +1,64 @@
-# Ansible Docker Installation Makefile
-# Common operations for managing Docker installation via Ansible
+# Ansible Monitoring Stack Makefile
+# Common operations for managing Docker and Monitoring Stack via Ansible
 
-.PHONY: help ping install install-update check syntax lint clean test deploy-monitoring monitoring-status monitoring-logs monitoring-stop monitoring-start
+.PHONY: help ping install install-update check syntax lint clean test \
+        deploy-monitoring deploy-monitoring-minimal \
+        deploy-prometheus deploy-grafana deploy-loki deploy-alertmanager \
+        deploy-exporters deploy-collectors monitoring-status monitoring-logs \
+        monitoring-stop monitoring-start monitoring-restart monitoring-health \
+        monitoring-backup monitoring-update monitoring-check
 
 # Default target
 help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "Docker Installation:"
-	@echo "  ping           - Test connectivity to all servers"
-	@echo "  install        - Install Docker on all Debian servers"
-	@echo "  install-update - Install Docker with system updates"
-	@echo "  test           - Test Docker installation"
+	@echo "  ping                    - Test connectivity to monitoring server"
+	@echo "  install                 - Install Docker on the server"
+	@echo "  install-update          - Install Docker with system updates"
+	@echo "  test                    - Test Docker installation"
 	@echo ""
-	@echo "Monitoring Stack:"
-	@echo "  deploy-monitoring - Deploy complete monitoring stack"
-	@echo "  monitoring-status - Show monitoring stack status"
-	@echo "  monitoring-logs   - Show monitoring stack logs"
-	@echo "  monitoring-start  - Start monitoring stack"
-	@echo "  monitoring-stop   - Stop monitoring stack"
+	@echo "Monitoring Stack - Deployment:"
+	@echo "  deploy-monitoring       - Deploy complete monitoring stack (recommended)"
+	@echo "  deploy-monitoring-minimal - Deploy minimal stack (Prometheus + Grafana)"
+	@echo ""
+	@echo "Monitoring Stack - Individual Components:"
+	@echo "  deploy-prometheus       - Deploy only Prometheus"
+	@echo "  deploy-grafana          - Deploy only Grafana"
+	@echo "  deploy-loki             - Deploy only Loki"
+	@echo "  deploy-alertmanager     - Deploy only Alertmanager"
+	@echo "  deploy-exporters        - Deploy Node Exporter and cAdvisor"
+	@echo "  deploy-collectors       - Deploy Promtail"
+	@echo ""
+	@echo "Monitoring Stack - Management:"
+	@echo "  monitoring-status       - Check status of all monitoring services"
+	@echo "  monitoring-logs         - Show monitoring stack logs"
+	@echo "  monitoring-start        - Start all monitoring services"
+	@echo "  monitoring-stop         - Stop all monitoring services"
+	@echo "  monitoring-restart      - Restart all monitoring services"
+	@echo "  monitoring-health       - Run health checks on all services"
+	@echo "  monitoring-backup       - Backup monitoring data"
+	@echo "  monitoring-update       - Update monitoring components"
+	@echo "  monitoring-check        - Run monitoring service check script"
 	@echo ""
 	@echo "Development:"
-	@echo "  check          - Run playbook in check mode (dry run)"
-	@echo "  syntax         - Check playbook syntax"
-	@echo "  lint           - Lint playbooks with ansible-lint"
-	@echo "  clean          - Clean up temporary files"
-	@echo "  help           - Show this help message"
+	@echo "  check                   - Run playbook in check mode (dry run)"
+	@echo "  syntax                  - Check playbook syntax"
+	@echo "  lint                    - Lint playbooks with ansible-lint"
+	@echo "  clean                   - Clean up temporary files"
+	@echo "  help                    - Show this help message"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make deploy-monitoring"
+	@echo "  make deploy-monitoring EXTRA_VARS='monitoring_deploy_loki=false'"
+	@echo "  make deploy-prometheus EXTRA_VARS='prometheus_retention=90d'"
+	@echo "  make monitoring-logs SERVICE=prometheus"
 
-# Test connectivity to all servers
+# Test connectivity to monitoring server
 ping:
-	ansible debian_servers -m ping
+	ansible monitoring_servers -m ping
 
-# Install Docker on all servers
+# Install Docker on the server
 install:
 	ansible-playbook site.yml
 
@@ -46,58 +73,104 @@ check:
 # Check syntax of playbooks
 syntax:
 	ansible-playbook site.yml --syntax-check
-	ansible-playbook playbooks/install-docker.yml --syntax-check
+	ansible-playbook playbooks/deploy-monitoring-meta.yml --syntax-check
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --syntax-check
 
 # Lint playbooks (requires ansible-lint)
 lint:
 	@which ansible-lint > /dev/null || (echo "ansible-lint not found. Install with: pip install ansible-lint" && exit 1)
 	ansible-lint site.yml
-	ansible-lint playbooks/install-docker.yml
+	ansible-lint playbooks/deploy-monitoring-meta.yml
+	ansible-lint playbooks/deploy-monitoring-individual.yml
 
 # Test Docker installation
 test:
-	ansible debian_servers -a "docker --version"
-	ansible debian_servers -a "docker compose version"
+	ansible monitoring_servers -a "docker --version"
+	ansible monitoring_servers -a "docker compose version"
 
-# Deploy monitoring stack (Grafana, Prometheus, Loki, Alertmanager)
+# Deploy complete monitoring stack (recommended)
 deploy-monitoring:
-	ansible-playbook playbooks/deploy-monitoring.yml
+	ansible-playbook playbooks/deploy-monitoring-meta.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
-# Deploy monitoring with custom settings
-deploy-monitoring-custom:
-	ansible-playbook playbooks/deploy-monitoring.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+# Deploy minimal monitoring stack
+deploy-monitoring-minimal:
+	ansible-playbook playbooks/deploy-monitoring-meta.yml --tags minimal
 
-# Show monitoring stack status
+# Deploy individual components
+deploy-prometheus:
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,prometheus
+
+deploy-grafana:
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,grafana
+
+deploy-loki:
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,loki
+
+deploy-alertmanager:
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,alertmanager
+
+deploy-exporters:
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,exporters
+
+deploy-collectors:
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,promtail
+
+# Monitoring management commands
 monitoring-status:
-	ansible debian_servers -a "/opt/monitoring/manage-stack.sh status" --become
+	@if [ -f /opt/monitoring/scripts/check-services.sh ]; then \
+		ansible monitoring_servers -a "/opt/monitoring/scripts/check-services.sh" --become; \
+	else \
+		ansible monitoring_servers -m shell -a "cd /opt/monitoring && for service in prometheus grafana loki alertmanager node-exporter cadvisor promtail; do echo \"Checking \$$service...\"; docker ps | grep \$$service || echo \"\$$service not running\"; done" --become; \
+	fi
 
-# Show monitoring stack logs
 monitoring-logs:
-	ansible debian_servers -a "/opt/monitoring/manage-stack.sh logs" --become
+	@if [ -n "$(SERVICE)" ]; then \
+		ansible monitoring_servers -m shell -a "docker logs --tail 100 -f $(SERVICE)" --become; \
+	else \
+		ansible monitoring_servers -m shell -a "cd /opt/monitoring && for service in prometheus grafana loki alertmanager; do echo \"=== \$$service logs ===\"; docker logs --tail 50 \$$service 2>&1; echo; done" --become; \
+	fi
 
-# Start monitoring stack
 monitoring-start:
-	ansible debian_servers -a "/opt/monitoring/manage-stack.sh start" --become
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager node-exporter cadvisor promtail; do [ -d \$$dir ] && cd \$$dir && docker compose up -d && cd ..; done" --become
 
-# Stop monitoring stack
 monitoring-stop:
-	ansible debian_servers -a "/opt/monitoring/manage-stack.sh stop" --become
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager node-exporter cadvisor promtail; do [ -d \$$dir ] && cd \$$dir && docker compose down && cd ..; done" --become
 
-# Restart monitoring stack
 monitoring-restart:
-	ansible debian_servers -a "/opt/monitoring/manage-stack.sh restart" --become
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager node-exporter cadvisor promtail; do [ -d \$$dir ] && cd \$$dir && docker compose restart && cd ..; done" --become
 
-# Check monitoring stack health
 monitoring-health:
-	ansible debian_servers -a "/opt/monitoring/manage-stack.sh health" --become
+	@echo "Running health checks on monitoring services..."
+	@ansible monitoring_servers -m uri -a "url=http://localhost:9090/-/ready" --become || echo "Prometheus not healthy"
+	@ansible monitoring_servers -m uri -a "url=http://localhost:3000/api/health" --become || echo "Grafana not healthy"
+	@ansible monitoring_servers -m uri -a "url=http://localhost:3100/ready" --become || echo "Loki not healthy"
+	@ansible monitoring_servers -m uri -a "url=http://localhost:9093/-/ready" --become || echo "Alertmanager not healthy"
+
+monitoring-check:
+	ansible monitoring_servers -a "/opt/monitoring/scripts/check-services.sh" --become
+
+monitoring-backup:
+	ansible monitoring_servers -a "/opt/monitoring/backup-monitoring.sh" --become
+
+monitoring-update:
+	ansible-playbook playbooks/deploy-monitoring-meta.yml --tags update
 
 # Show monitoring URLs
 monitoring-urls:
-	ansible debian_servers -a "/opt/monitoring/manage-stack.sh urls" --become
+	@ansible monitoring_servers -m shell -a "echo 'Monitoring Stack URLs:' && echo '=====================' && echo 'Prometheus: http://'\$$(hostname -I | awk '{print \$$1}')':9090' && echo 'Grafana: http://'\$$(hostname -I | awk '{print \$$1}')':3000' && echo 'Loki: http://'\$$(hostname -I | awk '{print \$$1}')':3100' && echo 'Alertmanager: http://'\$$(hostname -I | awk '{print \$$1}')':9093'" --become
 
-# Backup monitoring stack
-monitoring-backup:
-	ansible debian_servers -a "/opt/monitoring/manage-stack.sh backup" --become
+# Component-specific operations
+restart-prometheus:
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring/prometheus && docker compose restart" --become
+
+restart-grafana:
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring/grafana && docker compose restart" --become
+
+restart-loki:
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring/loki && docker compose restart" --become
+
+restart-alertmanager:
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring/alertmanager && docker compose restart" --become
 
 # Clean up temporary files
 clean:
@@ -105,37 +178,76 @@ clean:
 	find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 	find . -name "*.pyc" -delete
 
-# Install specific server
-install-server:
-	@if [ -z "$(SERVER)" ]; then echo "Usage: make install-server SERVER=server-name"; exit 1; fi
-	ansible-playbook site.yml --limit $(SERVER)
-
-# Variables that can be overridden
-ANSIBLE_ARGS ?=
-EXTRA_VARS ?=
-
-# Advanced targets with custom arguments
-install-custom:
-	ansible-playbook site.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
-
 # Show inventory
 inventory:
 	ansible-inventory --list
 
-# Show facts for all servers
+# Show facts for the server
 facts:
-	ansible debian_servers -m setup
+	ansible monitoring_servers -m setup
 
 # Update system packages only
 update-system:
-	ansible debian_servers -m apt -a "upgrade=dist update_cache=yes autoremove=yes" --become
+	ansible monitoring_servers -m apt -a "upgrade=dist update_cache=yes autoremove=yes" --become
 
-# Examples of usage:
-# make install
-# make install-update
-# make deploy-monitoring
-# make monitoring-status
-# make check
-# make install-server SERVER=debian-server-1
-# make install-custom EXTRA_VARS="docker_users=['user1','user2']"
-# make deploy-monitoring-custom EXTRA_VARS="grafana_admin_password=newsecretpass"
+# Validate monitoring configuration
+validate-config:
+	@echo "Validating Prometheus configuration..."
+	@ansible monitoring_servers -m shell -a "docker run --rm -v /opt/monitoring/prometheus/configs/prometheus.yml:/etc/prometheus/prometheus.yml --entrypoint promtool prom/prometheus:latest check config /etc/prometheus/prometheus.yml" --become
+	@echo "Validating Alertmanager configuration..."
+	@ansible monitoring_servers -m shell -a "docker run --rm -v /opt/monitoring/alertmanager/configs/alertmanager.yml:/etc/alertmanager/alertmanager.yml --entrypoint amtool prom/alertmanager:latest check-config /etc/alertmanager/alertmanager.yml" --become
+
+# Show disk usage for monitoring
+monitoring-disk-usage:
+	ansible monitoring_servers -m shell -a "du -sh /opt/monitoring/* | sort -h" --become
+
+# Tail logs for specific service
+tail-logs:
+	@if [ -z "$(SERVICE)" ]; then echo "Usage: make tail-logs SERVICE=prometheus"; exit 1; fi
+	ansible monitoring_servers -m shell -a "docker logs -f --tail 100 $(SERVICE)" --become
+
+# Variables that can be overridden
+ANSIBLE_ARGS ?=
+EXTRA_VARS ?=
+SERVICE ?=
+
+# Advanced deployment examples
+deploy-with-ssl:
+	ansible-playbook playbooks/deploy-monitoring-meta.yml -e "monitoring_ssl_enabled=true monitoring_domain=monitoring.example.com"
+
+deploy-with-auth:
+	ansible-playbook playbooks/deploy-monitoring-meta.yml -e "monitoring_enable_basic_auth=true grafana_admin_password=$${GRAFANA_PASSWORD}"
+
+# Migration from old monitoring-stack role
+migrate-monitoring:
+	@echo "Migrating from monitoring-stack to individual roles..."
+	@echo "1. Backing up existing data..."
+	@ansible monitoring_servers -m shell -a "[ -d /opt/monitoring ] && tar -czf /opt/monitoring-backup-$$(date +%Y%m%d-%H%M%S).tar.gz /opt/monitoring || echo 'No existing installation found'" --become
+	@echo "2. Deploying new structure..."
+	@$(MAKE) deploy-monitoring
+	@echo "Migration complete. Please verify all services are running."
+
+# Development helpers
+test-role:
+	@if [ -z "$(ROLE)" ]; then echo "Usage: make test-role ROLE=prometheus"; exit 1; fi
+	ansible-playbook -i inventory tests/test-$(ROLE).yml
+
+create-vault:
+	ansible-vault create group_vars/all/vault.yml
+
+edit-vault:
+	ansible-vault edit group_vars/all/vault.yml
+
+# Show component versions
+show-versions:
+	@echo "Checking deployed component versions..."
+	@ansible monitoring_servers -m shell -a "docker ps --format 'table {{.Names}}\t{{.Image}}' | grep -E 'prometheus|grafana|loki|alertmanager|node-exporter|cadvisor|promtail'" --become
+
+# Useful aliases
+status: monitoring-status
+logs: monitoring-logs
+start: monitoring-start
+stop: monitoring-stop
+restart: monitoring-restart
+backup: monitoring-backup
+urls: monitoring-urls

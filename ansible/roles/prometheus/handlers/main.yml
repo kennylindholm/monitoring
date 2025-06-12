@@ -1,0 +1,21 @@
+---
+- name: restart prometheus
+  command: docker compose -p prometheus -f {{ prometheus_base_dir }}/docker-compose.yml restart
+  args:
+    chdir: "{{ prometheus_base_dir }}"
+
+- name: stop prometheus
+  command: docker compose -p prometheus -f {{ prometheus_base_dir }}/docker-compose.yml down
+  args:
+    chdir: "{{ prometheus_base_dir }}"
+
+- name: start prometheus
+  command: docker compose -p prometheus -f {{ prometheus_base_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ prometheus_base_dir }}"
+
+- name: reload prometheus
+  uri:
+    url: "http://localhost:{{ prometheus_port }}/-/reload"
+    method: POST
+  ignore_errors: yes

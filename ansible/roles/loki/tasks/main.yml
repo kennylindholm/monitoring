@@ -1,0 +1,85 @@
+---
+- name: Create Loki directories
+  file:
+    path: "{{ loki_base_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ loki_user_id }}"
+    group: "{{ loki_group_id }}"
+    mode: "0755"
+  loop:
+    - data
+    - configs
+
+- name: Copy Loki configuration
+  template:
+    src: loki-config.yml.j2
+    dest: "{{ loki_base_dir }}/configs/loki-config.yml"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  notify: restart loki
+
+- name: Copy Docker Compose file for Loki
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ loki_base_dir }}/docker-compose.yml"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  notify: restart loki
+
+- name: Check if Loki is already running
+  command: docker compose -p loki -f {{ loki_base_dir }}/docker-compose.yml ps -q
+  register: loki_status
+  changed_when: false
+  failed_when: false
+
+- name: Start Loki
+  command: docker compose -p loki -f {{ loki_base_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ loki_base_dir }}"
+  when: loki_status.stdout == ""
+
+- name: Wait for Loki to be ready
+  wait_for:
+    port: "{{ loki_port }}"
+    host: localhost
+    delay: 10
+    timeout: 120
+
+- name: Verify Loki is running
+  uri:
+    url: "http://localhost:{{ loki_port }}/ready"
+    method: GET
+    status_code: 200
+    timeout: 30
+  register: loki_health
+  retries: 5
+  delay: 10
+
+- name: Check Loki metrics endpoint
+  uri:
+    url: "http://localhost:{{ loki_port }}/metrics"
+    method: GET
+    status_code: 200
+    timeout: 30
+  register: loki_metrics
+  retries: 3
+  delay: 5
+
+- name: Display Loki URL
+  debug:
+    msg: |
+      Loki deployed successfully!
+
+      Service is available at:
+      - Loki: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}
+
+      Data is persisted in: {{ loki_base_dir }}
+
+      To push logs to Loki, configure your applications to send logs to:
+      - Push endpoint: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}/loki/api/v1/push
+
+      To query logs from Loki:
+      - Query endpoint: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}/loki/api/v1/query
+      - Query range endpoint: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}/loki/api/v1/query_range

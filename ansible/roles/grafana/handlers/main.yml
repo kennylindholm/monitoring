@@ -1,0 +1,19 @@
+---
+- name: restart grafana
+  command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml restart
+  args:
+    chdir: "{{ grafana_base_dir }}"
+
+- name: stop grafana
+  command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml down
+  args:
+    chdir: "{{ grafana_base_dir }}"
+
+- name: start grafana
+  command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ grafana_base_dir }}"
+
+- name: reload grafana
+  command: docker exec grafana kill -HUP 1
+  ignore_errors: yes

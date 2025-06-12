@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  loki:
+    image: {{ loki_image }}
+    container_name: {{ loki_container_name }}
+    user: "{{ loki_user_id }}:{{ loki_group_id }}"
+    ports:
+      - "{{ loki_port }}:3100"
+      - "{{ loki_server_grpc_listen_port }}:9096"
+    volumes:
+      - ./configs/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - ./data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: {{ loki_restart_policy }}
+{% if loki_network_external %}
+    networks:
+      - {{ loki_network_name }}
+{% endif %}
+    environment:
+      - LOKI_LOG_LEVEL={{ loki_server_log_level }}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: {{ loki_healthcheck_interval }}
+      timeout: {{ loki_healthcheck_timeout }}
+      retries: {{ loki_healthcheck_retries }}
+      start_period: {{ loki_healthcheck_start_period }}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+{% if loki_network_external %}
+networks:
+  {{ loki_network_name }}:
+    external: true
+{% endif %}

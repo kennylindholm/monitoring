@@ -1,0 +1,15 @@
+---
+- name: restart cadvisor
+  command: docker compose -p cadvisor -f {{ cadvisor_base_dir }}/docker-compose.yml restart
+  args:
+    chdir: "{{ cadvisor_base_dir }}"
+
+- name: stop cadvisor
+  command: docker compose -p cadvisor -f {{ cadvisor_base_dir }}/docker-compose.yml down
+  args:
+    chdir: "{{ cadvisor_base_dir }}"
+
+- name: start cadvisor
+  command: docker compose -p cadvisor -f {{ cadvisor_base_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ cadvisor_base_dir }}"

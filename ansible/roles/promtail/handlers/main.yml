@@ -1,0 +1,19 @@
+---
+- name: restart promtail
+  command: docker compose -p promtail -f {{ promtail_base_dir }}/docker-compose.yml restart
+  args:
+    chdir: "{{ promtail_base_dir }}"
+
+- name: stop promtail
+  command: docker compose -p promtail -f {{ promtail_base_dir }}/docker-compose.yml down
+  args:
+    chdir: "{{ promtail_base_dir }}"
+
+- name: start promtail
+  command: docker compose -p promtail -f {{ promtail_base_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ promtail_base_dir }}"
+
+- name: reload promtail
+  command: docker exec promtail kill -HUP 1
+  ignore_errors: yes

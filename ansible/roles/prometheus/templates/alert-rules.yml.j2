@@ -1,0 +1,109 @@
+groups:
+  - name: system.rules
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instance {{ "{{ $labels.instance }}" }} down"
+          description: "{{ "{{ $labels.instance }}" }} of job {{ "{{ $labels.job }}" }} has been down for more than 10 minutes."
+
+      - alert: HighCpuLoad
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU load on instance {{ "{{ $labels.instance }}" }}"
+          description: "CPU load is above 80% on {{ "{{ $labels.instance }}" }} for more than 5 minutes."
+
+      - alert: HighMemoryLoad
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on instance {{ "{{ $labels.instance }}" }}"
+          description: "Memory usage is above 85% on {{ "{{ $labels.instance }}" }} for more than 5 minutes."
+
+      - alert: HighDiskUsage
+        expr: (node_filesystem_size_bytes{fstype!="tmpfs"} - node_filesystem_free_bytes{fstype!="tmpfs"}) / node_filesystem_size_bytes{fstype!="tmpfs"} * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage on instance {{ "{{ $labels.instance }}" }}"
+          description: "Disk usage is above 85% on {{ "{{ $labels.instance }}" }} filesystem {{ "{{ $labels.mountpoint }}" }}."
+
+  - name: docker.rules
+    rules:
+      - alert: ContainerKilled
+        expr: time() - container_last_seen > 60
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container killed on instance {{ "{{ $labels.instance }}" }}"
+          description: "A container has disappeared on {{ "{{ $labels.instance }}" }}"
+
+      - alert: ContainerCpuUsage
+        expr: (sum(rate(container_cpu_usage_seconds_total{name!=""}[3m])) BY (instance, name) * 100) > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container CPU usage on instance {{ "{{ $labels.instance }}" }}"
+          description: "Container CPU usage is above 80% on {{ "{{ $labels.instance }}" }} for container {{ "{{ $labels.name }}" }}"
+
+  - name: prometheus.rules
+    rules:
+      - alert: PrometheusJobMissing
+        expr: absent(up{job="prometheus"})
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus job missing"
+          description: "A Prometheus job has disappeared"
+
+      - alert: PrometheusTargetMissing
+        expr: up == 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus target missing on instance {{ "{{ $labels.instance }}" }}"
+          description: "A Prometheus target has disappeared. An exporter might be crashed."
+
+      - alert: PrometheusConfigurationReloadFailure
+        expr: prometheus_config_last_reload_successful != 1
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus configuration reload failure"
+          description: "Prometheus configuration reload error"
+
+  - name: grafana.rules
+    rules:
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Grafana is down"
+          description: "Grafana has been down for more than 5 minutes."
+
+  - name: alertmanager.rules
+    rules:
+      - alert: AlertmanagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager is down"
+          description: "Alertmanager has been down for more than 5 minutes."

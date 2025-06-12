@@ -1,0 +1,137 @@
+---
+# Meta role to orchestrate all monitoring components
+
+- name: Deploy monitoring stack components
+  debug:
+    msg: "Starting deployment of monitoring stack components"
+
+- name: Deploy common monitoring prerequisites
+  include_role:
+    name: monitoring-common
+  when: monitoring_deploy_common | default(true)
+
+- name: Deploy Prometheus
+  include_role:
+    name: prometheus
+  when: monitoring_deploy_prometheus | default(true)
+  tags:
+    - prometheus
+
+- name: Deploy Alertmanager
+  include_role:
+    name: alertmanager
+  when: monitoring_deploy_alertmanager | default(true)
+  tags:
+    - alertmanager
+
+- name: Deploy Loki
+  include_role:
+    name: loki
+  when: monitoring_deploy_loki | default(true)
+  tags:
+    - loki
+
+- name: Deploy Grafana
+  include_role:
+    name: grafana
+  when: monitoring_deploy_grafana | default(true)
+  tags:
+    - grafana
+
+- name: Deploy Node Exporter
+  include_role:
+    name: node-exporter
+  when: monitoring_deploy_node_exporter | default(true)
+  tags:
+    - node-exporter
+    - exporters
+
+- name: Deploy cAdvisor
+  include_role:
+    name: cadvisor
+  when: monitoring_deploy_cadvisor | default(true)
+  tags:
+    - cadvisor
+    - exporters
+
+- name: Deploy Promtail
+  include_role:
+    name: promtail
+  when: monitoring_deploy_promtail | default(true)
+  tags:
+    - promtail
+
+- name: Wait for all services to be ready
+  pause:
+    seconds: 30
+  when: monitoring_wait_for_services | default(true)
+
+- name: Verify monitoring stack deployment
+  block:
+    - name: Check Prometheus health
+      uri:
+        url: "http://localhost:{{ prometheus_port | default('9090') }}/-/ready"
+        method: GET
+        status_code: 200
+      when: monitoring_deploy_prometheus | default(true)
+
+    - name: Check Grafana health
+      uri:
+        url: "http://localhost:{{ grafana_port | default('3000') }}/api/health"
+        method: GET
+        status_code: 200
+      when: monitoring_deploy_grafana | default(true)
+
+    - name: Check Loki health
+      uri:
+        url: "http://localhost:{{ loki_port | default('3100') }}/ready"
+        method: GET
+        status_code: 200
+      when: monitoring_deploy_loki | default(true)
+
+    - name: Check Alertmanager health
+      uri:
+        url: "http://localhost:{{ alertmanager_port | default('9093') }}/-/ready"
+        method: GET
+        status_code: 200
+      when: monitoring_deploy_alertmanager | default(true)
+  when: monitoring_verify_deployment | default(true)
+
+- name: Display deployment summary
+  debug:
+    msg: |
+      ========================================
+      Monitoring Stack Deployment Complete!
+      ========================================
+
+      Services deployed:
+      {% if monitoring_deploy_prometheus | default(true) %}
+      - Prometheus: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port | default('9090') }}
+      {% endif %}
+      {% if monitoring_deploy_grafana | default(true) %}
+      - Grafana: http://{{ ansible_default_ipv4.address }}:{{ grafana_port | default('3000') }}
+        Username: {{ grafana_admin_user | default('admin') }}
+        Password: {{ grafana_admin_password | default('admin123') }}
+      {% endif %}
+      {% if monitoring_deploy_loki | default(true) %}
+      - Loki: http://{{ ansible_default_ipv4.address }}:{{ loki_port | default('3100') }}
+      {% endif %}
+      {% if monitoring_deploy_alertmanager | default(true) %}
+      - Alertmanager: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port | default('9093') }}
+      {% endif %}
+      {% if monitoring_deploy_node_exporter | default(true) %}
+      - Node Exporter: http://{{ ansible_default_ipv4.address }}:{{ node_exporter_port | default('9100') }}
+      {% endif %}
+      {% if monitoring_deploy_cadvisor | default(true) %}
+      - cAdvisor: http://{{ ansible_default_ipv4.address }}:{{ cadvisor_port | default('8080') }}
+      {% endif %}
+      {% if monitoring_deploy_promtail | default(true) %}
+      - Promtail: http://{{ ansible_default_ipv4.address }}:{{ promtail_port | default('9080') }}
+      {% endif %}
+
+      Base directory: {{ monitoring_base_dir | default('/opt/monitoring') }}
+
+      To check service status, run:
+      {{ monitoring_base_dir | default('/opt/monitoring') }}/scripts/check-services.sh
+
+      ========================================

@@ -17,16 +17,20 @@
   notify: restart node-exporter
 
 - name: Check if Node Exporter is already running
-  command: docker compose -p node-exporter -f {{ node_exporter_base_dir }}/docker-compose.yml ps -q
+  command: docker ps -q --filter name=node-exporter
   register: node_exporter_status
   changed_when: false
   failed_when: false
+  when: not ansible_check_mode
 
 - name: Start Node Exporter
   command: docker compose -p node-exporter -f {{ node_exporter_base_dir }}/docker-compose.yml up -d
   args:
     chdir: "{{ node_exporter_base_dir }}"
-  when: node_exporter_status.stdout == ""
+  when:
+    - not ansible_check_mode
+    - node_exporter_status is defined
+    - node_exporter_status.stdout == ""
 
 - name: Wait for Node Exporter to be ready
   wait_for:
@@ -34,6 +38,7 @@
     host: localhost
     delay: 5
     timeout: 60
+  when: not ansible_check_mode
 
 - name: Verify Node Exporter is running
   uri:
@@ -41,9 +46,10 @@
     method: GET
     status_code: 200
     timeout: 30
-  register: node_exporter_health
+  register: node_exporter_test
   retries: 3
   delay: 5
+  when: not ansible_check_mode
 
 - name: Check Node Exporter metrics
   uri:

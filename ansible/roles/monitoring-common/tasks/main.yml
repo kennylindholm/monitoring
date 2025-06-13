@@ -27,12 +27,14 @@
       - docker
       - docker-compose
     state: present
+  when: not ansible_check_mode
 
 - name: Ensure Docker is installed and running
   service:
     name: docker
     state: started
     enabled: yes
+  when: not ansible_check_mode
 
 - name: Create monitoring base directory
   file:
@@ -50,7 +52,7 @@
       - subnet: "{{ monitoring_network_subnet }}"
         gateway: "{{ monitoring_network_gateway }}"
     state: present
-  when: monitoring_create_network
+  when: monitoring_create_network and not ansible_check_mode
 
 - name: Create monitoring user
   user:
@@ -96,7 +98,7 @@
     hour: "{{ monitoring_backup_hour }}"
     minute: "{{ monitoring_backup_minute }}"
     state: present
-  when: monitoring_enable_backup
+  when: monitoring_enable_backup and not ansible_check_mode
 
 - name: Create SSL certificates directory
   file:
@@ -115,7 +117,7 @@
     -subj "/C=US/ST=State/L=City/O=Organization/CN={{ monitoring_domain }}"
   args:
     creates: "{{ monitoring_ssl_dir }}/monitoring.crt"
-  when: monitoring_ssl_enabled and monitoring_ssl_self_signed
+  when: monitoring_ssl_enabled and monitoring_ssl_self_signed and not ansible_check_mode
 
 - name: Set permissions on SSL files
   file:
@@ -126,7 +128,7 @@
   loop:
     - "{{ monitoring_ssl_dir }}/monitoring.crt"
     - "{{ monitoring_ssl_dir }}/monitoring.key"
-  when: monitoring_ssl_enabled
+  when: monitoring_ssl_enabled and not ansible_check_mode
 
 - name: Create monitoring scripts directory
   file:
@@ -145,9 +147,6 @@
     mode: "0755"
   loop:
     - check-services.sh
-    - restart-service.sh
-    - view-logs.sh
-    - export-metrics.sh
 
 - name: Create monitoring documentation
   template:
@@ -156,6 +155,7 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0644"
+  when: false # Template doesn't exist yet
 
 - name: Set up firewall rules for monitoring services
   ufw:
@@ -178,4 +178,4 @@
   systemd:
     name: firewalld
     state: reloaded
-  when: monitoring_configure_firewall and ansible_os_family == "RedHat"
+  when: monitoring_configure_firewall and ansible_os_family == "RedHat" and not ansible_check_mode

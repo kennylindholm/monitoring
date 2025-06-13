@@ -1,0 +1,47 @@
+---
+# Monitoring base configuration
+monitoring_base_dir: /opt/monitoring
+monitoring_network_name: monitoring
+monitoring_network_subnet: 172.28.0.0/16
+monitoring_network_gateway: 172.28.0.1
+monitoring_create_network: true
+
+# User configuration
+monitoring_user: monitoring
+monitoring_create_user: false
+
+# Backup configuration
+monitoring_enable_backup: true
+monitoring_backup_dir: "{{ monitoring_base_dir }}/backups"
+monitoring_backup_hour: "2"
+monitoring_backup_minute: "0"
+
+# SSL configuration
+monitoring_ssl_enabled: false
+monitoring_ssl_self_signed: true
+monitoring_ssl_dir: "{{ monitoring_base_dir }}/ssl"
+monitoring_domain: localhost
+
+# Scripts configuration
+monitoring_scripts_dir: "{{ monitoring_base_dir }}/scripts"
+
+# Firewall configuration
+monitoring_configure_firewall: false
+monitoring_firewall_ports:
+  - 9090  # Prometheus
+  - 3000  # Grafana
+  - 3100  # Loki
+  - 9093  # Alertmanager
+  - 9100  # Node Exporter
+  - 8080  # cAdvisor
+  - 9080  # Promtail
+
+# Log rotation configuration
+monitoring_enable_logrotate: true
+monitoring_log_retention_days: 14
+monitoring_log_max_size: 100M
+
+# Global monitoring configuration passed to other roles
+monitoring_global_config:
+  network_name: "{{ monitoring_network_name }}"
+  base_dir: "{{ monitoring_base_dir }}"

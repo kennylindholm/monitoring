@@ -29,23 +29,28 @@
   notify: restart promtail
 
 - name: Check if Promtail is already running
-  command: docker compose -p promtail -f {{ promtail_base_dir }}/docker-compose.yml ps -q
+  command: docker ps -q --filter name=promtail
   register: promtail_status
   changed_when: false
   failed_when: false
+  when: not ansible_check_mode
 
 - name: Start Promtail
   command: docker compose -p promtail -f {{ promtail_base_dir }}/docker-compose.yml up -d
   args:
     chdir: "{{ promtail_base_dir }}"
-  when: promtail_status.stdout == ""
+  when:
+    - not ansible_check_mode
+    - promtail_status is defined
+    - promtail_status.stdout == ""
 
 - name: Wait for Promtail to be ready
   wait_for:
     port: "{{ promtail_port }}"
     host: localhost
-    delay: 10
-    timeout: 120
+    delay: 5
+    timeout: 60
+  when: not ansible_check_mode
 
 - name: Verify Promtail is running
   uri:
@@ -54,8 +59,9 @@
     status_code: 200
     timeout: 30
   register: promtail_health
-  retries: 5
-  delay: 10
+  retries: 3
+  delay: 5
+  when: not ansible_check_mode
 
 - name: Check Promtail metrics
   uri:

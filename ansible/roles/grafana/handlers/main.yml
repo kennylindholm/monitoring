@@ -3,17 +3,21 @@
   command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml restart
   args:
     chdir: "{{ grafana_base_dir }}"
+  when: not ansible_check_mode
 
 - name: stop grafana
   command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml down
   args:
     chdir: "{{ grafana_base_dir }}"
+  when: not ansible_check_mode
 
 - name: start grafana
   command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml up -d
   args:
     chdir: "{{ grafana_base_dir }}"
+  when: not ansible_check_mode
 
 - name: reload grafana
   command: docker exec grafana kill -HUP 1
   ignore_errors: yes
+  when: not ansible_check_mode

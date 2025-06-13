@@ -79,11 +79,15 @@
     status_code: 200
     timeout: 30
   register: alertmanager_cluster_status
+  when: not ansible_check_mode
 
 - name: Display cluster status
   debug:
     msg: "Alertmanager cluster status: {{ alertmanager_cluster_status.json }}"
-  when: alertmanager_cluster_status is defined
+  when:
+    - alertmanager_cluster_status is defined
+    - alertmanager_cluster_status is not skipped
+    - not ansible_check_mode
 
 - name: Create webhook receivers directory
   file:

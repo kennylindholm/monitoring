@@ -12,7 +12,7 @@
     postrotate
         # Send signal to reload log files in containers
         for container in prometheus grafana loki alertmanager node-exporter cadvisor promtail; do
-            if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+            if docker ps --format '{{ '{{' }}.Names{{ '}}' }}' | grep -q "^${container}$"; then
                 docker kill -s HUP $container 2>/dev/null || true
             fi
         done

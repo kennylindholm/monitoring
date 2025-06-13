@@ -97,11 +97,13 @@
         path: "/home/{{ ansible_user }}/.bashrc"
         line: "{{ item }}"
         state: present
+        create: yes
       loop:
         - "alias mon-check='{{ monitoring_base_dir }}/scripts/check-services.sh'"
         - "alias mon-logs='{{ monitoring_base_dir }}/scripts/view-logs.sh'"
         - "alias mon-restart='{{ monitoring_base_dir }}/scripts/restart-service.sh'"
         - "alias mon-backup='{{ monitoring_base_dir }}/backup-monitoring.sh'"
+      when: not ansible_check_mode
 
     - name: Create monitoring CLI tool
       copy:
@@ -146,6 +148,7 @@
         src: monitoring-docs.md.j2
         dest: "{{ monitoring_base_dir }}/DOCUMENTATION.md"
         mode: "0644"
+      when: false # Template doesn't exist yet
 
     - name: Final deployment verification
       block:

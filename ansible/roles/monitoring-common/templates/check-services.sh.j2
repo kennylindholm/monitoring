@@ -38,7 +38,7 @@ check_service() {
     esac
 
     # Check if container is running
-    if docker ps --format '{{.Names}}' | grep -q "^${service}$"; then
+    if docker ps --format '{{ '{{' }}.Names{{ '}}' }}' | grep -q "^${service}$"; then
         status="${GREEN}RUNNING${NC}"
         ((RUNNING++))
 
@@ -165,7 +165,7 @@ echo "----------------------------------------"
 if docker network ls | grep -q "{{ monitoring_network_name | default('monitoring') }}"; then
     echo -e "Monitoring network: ${GREEN}Active${NC}"
     # Count containers on the network
-    container_count=$(docker network inspect {{ monitoring_network_name | default('monitoring') }} -f '{{len .Containers}}' 2>/dev/null || echo "0")
+    container_count=$(docker network inspect {{ monitoring_network_name | default('monitoring') }} -f '{{ '{{' }}len .Containers{{ '}}' }}' 2>/dev/null || echo "0")
     echo "Containers on network: $container_count"
 else
     echo -e "Monitoring network: ${RED}Not found${NC}"

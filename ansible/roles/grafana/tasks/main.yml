@@ -52,7 +52,7 @@
   notify: restart grafana
 
 - name: Check if Grafana is already running
-  command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml ps -q
+  command: docker ps -q --filter name=grafana
   register: grafana_status
   changed_when: false
   failed_when: false
@@ -103,7 +103,7 @@
     body_format: json
     body:
       name: "{{ item.name }}"
-    status_code: [200, 409]  # 409 means already exists
+    status_code: [200, 409] # 409 means already exists
   loop: "{{ grafana_organizations }}"
   when: grafana_organizations is defined and grafana_organizations | length > 0
 
@@ -121,7 +121,7 @@
       login: "{{ item.login }}"
       password: "{{ item.password }}"
       orgId: "{{ item.orgId | default(1) }}"
-    status_code: [200, 412]  # 412 means user already exists
+    status_code: [200, 412] # 412 means user already exists
   loop: "{{ grafana_users }}"
   when: grafana_users is defined and grafana_users | length > 0
   no_log: true

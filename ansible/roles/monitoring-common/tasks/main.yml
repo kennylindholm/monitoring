@@ -8,6 +8,7 @@
       - gnupg
       - lsb-release
       - python3-pip
+      - python3-docker
     state: present
   when: ansible_os_family == "Debian"
 
@@ -21,13 +22,15 @@
     state: present
   when: ansible_os_family == "RedHat"
 
-- name: Install Docker Python SDK
+- name: Install Docker Python SDK via pip (RedHat)
   pip:
     name:
       - docker
       - docker-compose
     state: present
-  when: not ansible_check_mode
+  when:
+    - ansible_os_family == "RedHat"
+    - not ansible_check_mode
 
 - name: Ensure Docker is installed and running
   service:

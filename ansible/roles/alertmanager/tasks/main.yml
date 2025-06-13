@@ -44,7 +44,7 @@
   notify: restart alertmanager
 
 - name: Check if Alertmanager is already running
-  command: docker compose -p alertmanager -f {{ alertmanager_base_dir }}/docker-compose.yml ps -q
+  command: docker ps -q --filter name=alertmanager
   register: alertmanager_status
   changed_when: false
   failed_when: false

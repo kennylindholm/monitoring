@@ -57,7 +57,7 @@
   notify: restart prometheus
 
 - name: Check if Prometheus is already running
-  command: docker compose -p prometheus -f {{ prometheus_base_dir }}/docker-compose.yml ps -q
+  command: docker ps -q --filter name=prometheus
   register: prometheus_status
   changed_when: false
   failed_when: false

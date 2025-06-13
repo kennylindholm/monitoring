@@ -11,19 +11,23 @@ ansible/
 ├── inventories/
 │   └── hosts               # Server inventory
 ├── playbooks/
-│   ├── install-docker.yml  # Docker installation playbook
-│   └── deploy-monitoring.yml # Monitoring stack deployment
+│   ├── install-docker.yml            # Docker installation playbook
+│   ├── deploy-monitoring-all.yml     # Complete monitoring stack deployment (recommended)
+│   └── deploy-monitoring-individual.yml # Individual component deployment
 ├── roles/
 │   ├── docker/             # Docker installation role
 │   │   ├── tasks/
 │   │   ├── handlers/
 │   │   └── vars/
-│   └── monitoring-stack/   # Monitoring stack role
-│       ├── tasks/
-│       ├── handlers/
-│       ├── templates/      # Configuration templates
-│       ├── vars/
-│       └── files/
+│   ├── monitoring-meta/    # Meta role that orchestrates deployment
+│   ├── monitoring-common/  # Common monitoring prerequisites
+│   ├── prometheus/         # Prometheus role
+│   ├── grafana/           # Grafana role
+│   ├── loki/              # Loki role
+│   ├── alertmanager/      # Alertmanager role
+│   ├── node-exporter/     # Node Exporter role
+│   ├── cadvisor/          # cAdvisor role
+│   └── promtail/          # Promtail role
 └── examples/
     └── docker-compose.example.yml
 ```
@@ -31,13 +35,14 @@ ansible/
 ## Prerequisites
 
 1. **Ansible installed** on your control machine:
+
    ```bash
    # On Ubuntu/Debian
    sudo apt update && sudo apt install ansible
-   
+
    # On macOS
    brew install ansible
-   
+
    # Using pip
    pip3 install ansible
    ```
@@ -82,8 +87,11 @@ ansible-playbook site.yml
 # Install only Docker
 ansible-playbook playbooks/install-docker.yml
 
-# Deploy only monitoring stack (requires Docker)
-ansible-playbook playbooks/deploy-monitoring.yml
+# Deploy complete monitoring stack (requires Docker)
+ansible-playbook playbooks/deploy-monitoring-all.yml
+
+# Deploy individual components
+ansible-playbook playbooks/deploy-monitoring-individual.yml --tags prometheus,grafana
 
 # Run with system update (recommended for new servers)
 ansible-playbook site.yml -e "update_system=true"
@@ -140,6 +148,7 @@ ansible-playbook site.yml -e "update_system=true"
 ## What This Playbook Does
 
 ### Docker Installation
+
 1. **System Verification**: Confirms the target is running Debian 12
 2. **Package Updates**: Updates system packages (optional)
 3. **Prerequisites**: Installs required packages (curl, ca-certificates, etc.)
@@ -150,17 +159,26 @@ ansible-playbook site.yml -e "update_system=true"
 8. **Verification**: Tests Docker installation with hello-world container
 
 ### Monitoring Stack Deployment
-1. **Infrastructure Setup**: Creates monitoring directories and configuration
-2. **Service Deployment**: Deploys Prometheus, Grafana, Loki, and Alertmanager
-3. **Monitoring Agents**: Installs Node Exporter, cAdvisor, and Promtail
-4. **Configuration**: Sets up datasources, dashboards, and alert rules
-5. **Health Checks**: Verifies all services are running and accessible
-6. **Management Tools**: Creates management scripts and systemd service
-7. **Firewall Configuration**: Optionally configures firewall rules
+
+The monitoring stack uses a modular architecture with individual roles for each component:
+
+1. **Infrastructure Setup**: Creates monitoring directories and Docker network
+2. **Component Deployment**: Deploys each service using dedicated roles:
+   - Prometheus (metrics collection)
+   - Grafana (visualization)
+   - Loki (log aggregation)
+   - Alertmanager (alert routing)
+   - Node Exporter (system metrics)
+   - cAdvisor (container metrics)
+   - Promtail (log collection)
+3. **Configuration**: Automatically configures service integrations
+4. **Health Checks**: Verifies all services are running and accessible
+5. **Management Tools**: Provides scripts for easy stack management
 
 ## Installed Components
 
 ### Docker Platform
+
 - Docker CE (Community Edition)
 - Docker CLI
 - containerd.io
@@ -168,6 +186,7 @@ ansible-playbook site.yml -e "update_system=true"
 - Docker Compose plugin
 
 ### Monitoring Stack
+
 - **Prometheus**: Metrics collection and alerting
 - **Grafana**: Visualization and dashboards
 - **Loki**: Log aggregation and analysis
@@ -179,6 +198,7 @@ ansible-playbook site.yml -e "update_system=true"
 ## Post-Installation
 
 ### Docker Commands
+
 ```bash
 # Check Docker version
 docker --version
@@ -194,6 +214,7 @@ systemctl status docker
 ```
 
 ### Monitoring Stack Access
+
 After deployment, access your monitoring services:
 
 - **Grafana**: http://YOUR_SERVER_IP:3000 (admin/admin123)
@@ -202,16 +223,17 @@ After deployment, access your monitoring services:
 - **Alertmanager**: http://YOUR_SERVER_IP:9093
 
 ### Monitoring Stack Management
-```bash
-# Use the management script
-/opt/monitoring/manage-stack.sh status
-/opt/monitoring/manage-stack.sh logs
-/opt/monitoring/manage-stack.sh restart
 
-# Or use the shortcuts
-monitoring-stack status
-monitoring-stack health
-monitoring-stack backup
+```bash
+# Use the management scripts
+/opt/monitoring/scripts/check-services.sh
+/opt/monitoring/scripts/view-logs.sh
+/opt/monitoring/scripts/restart-service.sh
+
+# Or use the monitoring command
+monitoring status
+monitoring logs
+monitoring restart
 
 # Using Make commands
 make monitoring-status
@@ -224,12 +246,14 @@ make monitoring-health
 ### Common Issues
 
 1. **Permission Denied**: If you get permission errors, ensure your user is in the docker group:
+
    ```bash
    sudo usermod -aG docker $USER
    # Log out and back in for changes to take effect
    ```
 
-2. **SSH Connection Issues**: 
+2. **SSH Connection Issues**:
+
    - Verify SSH key authentication is working
    - Check if the ansible_user has sudo privileges
    - Ensure Python 3 is installed on target servers
@@ -254,7 +278,7 @@ Test what changes would be made without applying them:
 
 ```bash
 ansible-playbook site.yml --check
-ansible-playbook playbooks/deploy-monitoring.yml --check
+ansible-playbook playbooks/deploy-monitoring-all.yml --check
 ```
 
 ## Security Considerations
@@ -272,22 +296,37 @@ make install              # Install Docker on all servers
 make install-update       # Install Docker with system updates
 make test                 # Test Docker installation
 
-# Monitoring Stack
-make deploy-monitoring    # Deploy complete monitoring stack
+# Monitoring Stack - Full Deployment
+make deploy-monitoring    # Deploy complete monitoring stack (recommended)
+make deploy-monitoring-minimal # Deploy minimal stack (Prometheus + Grafana)
+
+# Monitoring Stack - Individual Components
+make deploy-prometheus    # Deploy only Prometheus
+make deploy-grafana      # Deploy only Grafana
+make deploy-loki         # Deploy only Loki
+make deploy-alertmanager # Deploy only Alertmanager
+make deploy-exporters    # Deploy Node Exporter and cAdvisor
+make deploy-collectors   # Deploy Promtail
+
+# Monitoring Stack - Management
 make monitoring-status    # Show monitoring stack status
 make monitoring-logs      # Show monitoring stack logs
 make monitoring-health    # Check monitoring stack health
 make monitoring-backup    # Create backup of monitoring data
+make monitoring-restart   # Restart all monitoring services
+make monitoring-urls      # Show monitoring service URLs
 
 # Development
 make check                # Run playbooks in check mode
 make syntax               # Check playbook syntax
 make ping                 # Test server connectivity
+make lint                 # Lint playbooks with ansible-lint
 ```
 
 ## Monitoring Stack Configuration
 
 ### Default Services and Ports
+
 - Grafana: 3000
 - Prometheus: 9090
 - Loki: 3100
@@ -296,21 +335,27 @@ make ping                 # Test server connectivity
 - cAdvisor: 8080
 
 ### Customization Options
+
 Override default settings:
 
 ```bash
 # Custom Grafana password
-make deploy-monitoring-custom EXTRA_VARS="grafana_admin_password=mysecretpass"
+make deploy-monitoring EXTRA_VARS="meta_grafana_admin_password=mysecretpass"
+
+# Deploy without specific components
+make deploy-monitoring EXTRA_VARS="monitoring_deploy_loki=false monitoring_deploy_alertmanager=false"
 
 # Custom ports
-ansible-playbook playbooks/deploy-monitoring.yml -e "grafana_port=3001 prometheus_port=9091"
+ansible-playbook playbooks/deploy-monitoring-all.yml -e "grafana_port=3001 prometheus_port=9091"
 
 # Disable certain components
-ansible-playbook playbooks/deploy-monitoring.yml -e "cadvisor_enabled=false"
+ansible-playbook playbooks/deploy-monitoring-all.yml -e "monitoring_deploy_cadvisor=false"
 ```
 
 ### Data Persistence
+
 All monitoring data is stored in `/opt/monitoring/` with the following structure:
+
 ```
 /opt/monitoring/
 ├── prometheus/data/      # Metrics data

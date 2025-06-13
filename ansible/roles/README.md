@@ -1,6 +1,6 @@
 # Monitoring Stack Ansible Roles
 
-This directory contains individual Ansible roles for deploying a complete monitoring stack. The original `monitoring-stack` role has been split into modular components for better flexibility and maintainability.
+This directory contains individual Ansible roles for deploying a complete monitoring stack. The roles are modular components that provide flexibility and maintainability.
 
 ## Available Roles
 
@@ -131,6 +131,7 @@ monitoring_backup_retention_days: 7
 Each role has its own variables that can be overridden:
 
 #### Prometheus
+
 ```yaml
 prometheus_port: 9090
 prometheus_retention: "30d"
@@ -139,6 +140,7 @@ prometheus_image: "prom/prometheus:latest"
 ```
 
 #### Grafana
+
 ```yaml
 grafana_port: 3000
 grafana_admin_user: admin
@@ -147,6 +149,7 @@ grafana_image: "grafana/grafana:latest"
 ```
 
 #### Loki
+
 ```yaml
 loki_port: 3100
 loki_retention_period: "744h"
@@ -154,6 +157,7 @@ loki_image: "grafana/loki:latest"
 ```
 
 #### Alertmanager
+
 ```yaml
 alertmanager_port: 9093
 alertmanager_smtp_enabled: false
@@ -214,7 +218,7 @@ Full stack with custom settings:
 
     # Retention
     prometheus_retention: "90d"
-    loki_retention_period: "2160h"  # 90 days
+    loki_retention_period: "2160h" # 90 days
 
     # Resources
     monitoring_resource_limits:
@@ -239,14 +243,14 @@ Full stack with custom settings:
 
 ```yaml
 prometheus_additional_scrape_targets:
-  - job_name: 'custom-app'
+  - job_name: "custom-app"
     static_configs:
-      - targets: ['app1.example.com:8080', 'app2.example.com:8080']
+      - targets: ["app1.example.com:8080", "app2.example.com:8080"]
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
-        regex: '([^:]+).*'
-        replacement: '${1}'
+        regex: "([^:]+).*"
+        replacement: "${1}"
 ```
 
 ## Maintenance
@@ -304,17 +308,20 @@ monitoring restart grafana
 ### Common Issues
 
 1. **Services not starting**: Check Docker logs
+
    ```bash
    docker logs prometheus
    docker logs grafana
    ```
 
 2. **Network connectivity**: Verify Docker network
+
    ```bash
    docker network inspect monitoring
    ```
 
 3. **Permission issues**: Check directory ownership
+
    ```bash
    ls -la /opt/monitoring/
    ```
@@ -336,14 +343,9 @@ prometheus_log_level: "debug"
 grafana_log_level: "debug"
 ```
 
-## Migration from monitoring-stack Role
+## Migration Guide
 
-To migrate from the original monitoring-stack role:
-
-1. Backup existing data
-2. Stop the monitoring-stack services
-3. Deploy using individual roles with the same configuration
-4. Verify data persistence and service functionality
+For migration from older deployments, please see the [MIGRATION_GUIDE.md](../MIGRATION_GUIDE.md) in the parent directory. 4. Verify data persistence and service functionality
 
 ## Contributing
 
@@ -357,4 +359,4 @@ When adding new roles or features:
 
 ## License
 
-These roles are provided under the same license as the original monitoring-stack role.
+These roles are provided under the MIT license.

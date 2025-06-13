@@ -8,7 +8,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-User={{ monitoring_user }}
+User={{ monitoring_user | default(ansible_user) }}
 Group=docker
 WorkingDirectory={{ monitoring_stack_dir }}
 
@@ -36,7 +36,7 @@ ProtectHome=true
 ReadWritePaths={{ monitoring_stack_dir }}
 
 # Environment
-Environment=COMPOSE_PROJECT_NAME=monitoring-stack
+Environment=COMPOSE_PROJECT_NAME=monitoring
 Environment=DOCKER_BUILDKIT=1
 
 # Timeout settings

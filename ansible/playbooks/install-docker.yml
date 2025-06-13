@@ -1,17 +1,17 @@
 ---
 - name: Install Docker on Debian 12 servers
   hosts: debian_servers
-  become: yes
-  gather_facts: yes
-  
+  become: true
+  gather_facts: true
+
   pre_tasks:
     - name: Verify OS is Debian 12
       fail:
         msg: "This playbook is designed for Debian 12 only. Current OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
       when: >
-        ansible_distribution != "Debian" or 
+        ansible_distribution != "Debian" or
         ansible_distribution_major_version != "12"
-    
+
     - name: Update system packages
       apt:
         upgrade: dist
@@ -28,17 +28,17 @@
       command: docker run --rm hello-world
       register: docker_test
       changed_when: false
-      
+
     - name: Display Docker test results
       debug:
         msg: "Docker test completed successfully"
       when: docker_test.rc == 0
-      
+
     - name: Test Docker Compose
       command: docker compose version
       register: compose_test
       changed_when: false
-      
+
     - name: Display Docker Compose version
       debug:
         msg: "Docker Compose version: {{ compose_test.stdout }}"
@@ -47,7 +47,7 @@
   vars:
     # Set to true if you want to update all system packages
     update_system: false
-    
+
     # Users to add to docker group (in addition to ansible_user)
     docker_users:
       - "{{ ansible_user }}"

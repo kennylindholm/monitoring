@@ -1,5 +1,5 @@
 ---
-- name: Deploy Complete Monitoring Stack using Meta Role
+- name: Deploy All Monitoring Stack Components
   hosts: monitoring_servers
   become: yes
   gather_facts: yes
@@ -41,7 +41,7 @@
 
     - name: Ensure system packages are up to date
       package:
-        name: '*'
+        name: "*"
         state: latest
         update_cache: yes
       when: update_system_packages | default(false)
@@ -90,7 +90,7 @@
           - Prometheus Retention: {{ meta_prometheus_retention }}
           - Loki Retention: {{ meta_loki_retention_period }}
         dest: "{{ monitoring_base_dir }}/deployment-record-{{ ansible_date_time.epoch }}.txt"
-        mode: '0644'
+        mode: "0644"
 
     - name: Set up quick access aliases
       lineinfile:
@@ -139,13 +139,13 @@
               ;;
           esac
         dest: /usr/local/bin/monitoring
-        mode: '0755'
+        mode: "0755"
 
     - name: Generate documentation
       template:
         src: monitoring-docs.md.j2
         dest: "{{ monitoring_base_dir }}/DOCUMENTATION.md"
-        mode: '0644'
+        mode: "0644"
 
     - name: Final deployment verification
       block:
@@ -250,21 +250,20 @@
         dest: "{{ backup_remote_path }}/"
         mode: push
       when: backup_remote_path is defined
-
 # Usage examples:
 # Full deployment:
-# ansible-playbook -i inventory deploy-monitoring-meta.yml
+# ansible-playbook -i inventory deploy-monitoring-all.yml
 #
 # Minimal deployment:
-# ansible-playbook -i inventory deploy-monitoring-meta.yml --tags minimal
+# ansible-playbook -i inventory deploy-monitoring-all.yml --tags minimal
 #
 # Update components:
-# ansible-playbook -i inventory deploy-monitoring-meta.yml --tags update
+# ansible-playbook -i inventory deploy-monitoring-all.yml --tags update
 #
 # Backup data:
-# ansible-playbook -i inventory deploy-monitoring-meta.yml --tags backup
+# ansible-playbook -i inventory deploy-monitoring-all.yml --tags backup
 #
 # Deploy with custom settings:
-# ansible-playbook -i inventory deploy-monitoring-meta.yml \
+# ansible-playbook -i inventory deploy-monitoring-all.yml \
 #   -e monitoring_deploy_loki=false \
 #   -e monitoring_deploy_promtail=false

@@ -19,7 +19,7 @@ help:
 	@echo "  test                    - Test Docker installation"
 	@echo ""
 	@echo "Monitoring Stack - Deployment:"
-	@echo "  deploy-monitoring       - Deploy complete monitoring stack (recommended)"
+	@echo "  deploy-monitoring       - Deploy all monitoring components (recommended)"
 	@echo "  deploy-monitoring-minimal - Deploy minimal stack (Prometheus + Grafana)"
 	@echo ""
 	@echo "Monitoring Stack - Individual Components:"
@@ -73,14 +73,14 @@ check:
 # Check syntax of playbooks
 syntax:
 	ansible-playbook site.yml --syntax-check
-	ansible-playbook playbooks/deploy-monitoring-meta.yml --syntax-check
+	ansible-playbook playbooks/deploy-monitoring-all.yml --syntax-check
 	ansible-playbook playbooks/deploy-monitoring-individual.yml --syntax-check
 
 # Lint playbooks (requires ansible-lint)
 lint:
 	@which ansible-lint > /dev/null || (echo "ansible-lint not found. Install with: pip install ansible-lint" && exit 1)
 	ansible-lint site.yml
-	ansible-lint playbooks/deploy-monitoring-meta.yml
+	ansible-lint playbooks/deploy-monitoring-all.yml
 	ansible-lint playbooks/deploy-monitoring-individual.yml
 
 # Test Docker installation
@@ -88,13 +88,13 @@ test:
 	ansible monitoring_servers -a "docker --version"
 	ansible monitoring_servers -a "docker compose version"
 
-# Deploy complete monitoring stack (recommended)
+# Deploy all monitoring components (recommended)
 deploy-monitoring:
-	ansible-playbook playbooks/deploy-monitoring-meta.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-monitoring-all.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 # Deploy minimal monitoring stack
 deploy-monitoring-minimal:
-	ansible-playbook playbooks/deploy-monitoring-meta.yml --tags minimal
+	ansible-playbook playbooks/deploy-monitoring-all.yml --tags minimal
 
 # Deploy individual components
 deploy-prometheus:
@@ -153,7 +153,7 @@ monitoring-backup:
 	ansible monitoring_servers -a "/opt/monitoring/backup-monitoring.sh" --become
 
 monitoring-update:
-	ansible-playbook playbooks/deploy-monitoring-meta.yml --tags update
+	ansible-playbook playbooks/deploy-monitoring-all.yml --tags update
 
 # Show monitoring URLs
 monitoring-urls:
@@ -213,14 +213,14 @@ SERVICE ?=
 
 # Advanced deployment examples
 deploy-with-ssl:
-	ansible-playbook playbooks/deploy-monitoring-meta.yml -e "monitoring_ssl_enabled=true monitoring_domain=monitoring.example.com"
+	ansible-playbook playbooks/deploy-monitoring-all.yml -e "monitoring_ssl_enabled=true monitoring_domain=monitoring.example.com"
 
 deploy-with-auth:
-	ansible-playbook playbooks/deploy-monitoring-meta.yml -e "monitoring_enable_basic_auth=true grafana_admin_password=$${GRAFANA_PASSWORD}"
+	ansible-playbook playbooks/deploy-monitoring-all.yml -e "monitoring_enable_basic_auth=true grafana_admin_password=$${GRAFANA_PASSWORD}"
 
-# Migration from old monitoring-stack role
+# Migration helper
 migrate-monitoring:
-	@echo "Migrating from monitoring-stack to individual roles..."
+	@echo "Migrating to new modular monitoring structure..."
 	@echo "1. Backing up existing data..."
 	@ansible monitoring_servers -m shell -a "[ -d /opt/monitoring ] && tar -czf /opt/monitoring-backup-$$(date +%Y%m%d-%H%M%S).tar.gz /opt/monitoring || echo 'No existing installation found'" --become
 	@echo "2. Deploying new structure..."

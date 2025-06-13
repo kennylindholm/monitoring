@@ -1,11 +1,18 @@
 ---
 # Main site playbook - Entry point for all Ansible operations
+
+# Install Docker on servers
 - import_playbook: playbooks/install-docker.yml
   tags: docker
 
-- import_playbook: playbooks/deploy-monitoring.yml
+# Deploy monitoring stack using the meta role approach (recommended)
+- import_playbook: playbooks/deploy-monitoring-all.yml
   tags: monitoring
-
 # Additional playbooks can be added here as the project grows
+# Examples:
 # - import_playbook: playbooks/security.yml
 #   tags: security
+# - import_playbook: playbooks/backup.yml
+#   tags: backup
+# - import_playbook: playbooks/update.yml
+#   tags: update

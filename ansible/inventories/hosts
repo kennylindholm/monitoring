@@ -1,7 +1,65 @@
-[debian_servers]
+# Monitoring Infrastructure Inventory
+
+[monitoring_servers]
 # Replace with your actual server IP addresses or hostnames
 monitoring ansible_host=192.168.122.43 ansible_user=root
 
-[debian_servers:vars]
+[monitoring_servers:vars]
 ansible_ssh_private_key_file=~/.ssh/id_ed25519
 ansible_python_interpreter=/usr/bin/python3
+
+# Legacy group for backward compatibility
+[debian_servers:children]
+monitoring_servers
+
+# Additional monitoring servers can be added here
+# [monitoring_servers]
+# monitoring-1 ansible_host=192.168.122.43 ansible_user=root
+# monitoring-2 ansible_host=192.168.122.44 ansible_user=root
+# monitoring-3 ansible_host=192.168.122.45 ansible_user=root
+
+# Group variables for all monitoring servers
+[all:vars]
+# Common SSH settings
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+# Python interpreter
+ansible_python_interpreter=/usr/bin/python3
+
+# Monitoring stack configuration
+monitoring_stack_dir=/opt/monitoring
+
+# Service ports
+prometheus_port=9090
+grafana_port=3000
+loki_port=3100
+alertmanager_port=9093
+node_exporter_port=9100
+cadvisor_port=8080
+promtail_port=9080
+
+# Default credentials (change in production!)
+grafana_admin_user=admin
+grafana_admin_password=admin123
+
+# Feature flags
+monitoring_deploy_prometheus=true
+monitoring_deploy_grafana=true
+monitoring_deploy_loki=true
+monitoring_deploy_alertmanager=true
+monitoring_deploy_exporters=true
+monitoring_deploy_promtail=true
+
+# Data retention
+prometheus_retention=30d
+loki_retention_period=744h
+
+# Environment-specific groups (optional)
+# [production:children]
+# monitoring_servers
+
+# [staging:children]
+# monitoring_servers
+
+# [development:children]
+# monitoring_servers

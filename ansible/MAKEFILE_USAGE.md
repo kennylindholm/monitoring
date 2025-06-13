@@ -223,7 +223,7 @@ make deploy-monitoring ANSIBLE_ARGS='--ask-vault-pass'
 
 ## Migration
 
-### From Old monitoring-stack Role
+### From Previous Installation
 
 ```bash
 # Automated migration with backup

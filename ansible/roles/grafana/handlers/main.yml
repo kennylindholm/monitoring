@@ -19,5 +19,5 @@
 
 - name: reload grafana
   command: docker exec grafana kill -HUP 1
-  ignore_errors: yes
+  ignore_errors: true
   when: not ansible_check_mode

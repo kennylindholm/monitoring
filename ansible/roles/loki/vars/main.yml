@@ -13,12 +13,13 @@ loki_user_id: "10001"
 loki_group_id: "10001"
 
 # Loki configuration
-loki_retention_period: "744h"  # 31 days
+#loki_retention_period: "105120h" # 12 years (12 * 365 * 24 hours)
+loki_retention_period: "12y" # 12 years (12 * 365 * 24 hours)
 loki_retention_delete_delay: "2h"
 loki_retention_delete_worker_count: 150
 
 # Storage configuration
-loki_storage_type: "filesystem"  # filesystem or s3
+loki_storage_type: "filesystem" # filesystem or s3
 loki_storage_path: "/loki"
 
 # S3 storage configuration (if using S3)
@@ -80,8 +81,8 @@ loki_network_name: "monitoring"
 loki_network_external: true
 
 # Performance tuning
-loki_grpc_server_max_recv_msg_size: 104857600  # 100MB
-loki_grpc_server_max_send_msg_size: 104857600  # 100MB
+loki_grpc_server_max_recv_msg_size: 104857600 # 100MB
+loki_grpc_server_max_send_msg_size: 104857600 # 100MB
 loki_grpc_server_max_concurrent_streams: 1000
 
 # Ring configuration

@@ -1,0 +1,92 @@
+# Promtail configuration
+# {{ ansible_managed }}
+
+server:
+  http_listen_port: {{ promtail_http_listen_port }}
+  grpc_listen_port: {{ promtail_grpc_listen_port }}
+  log_level: {{ promtail_log_level }}
+  log_format: {{ promtail_log_format }}
+
+positions:
+  filename: {{ promtail_positions_file }}
+
+clients:
+  - url: {{ promtail_loki_url }}
+{% if promtail_external_labels %}
+    external_labels:
+{% for key, value in promtail_external_labels.items() %}
+      {{ key }}: "{{ value }}"
+{% endfor %}
+{% endif %}
+
+scrape_configs:
+{% for config in promtail_scrape_configs %}
+  - job_name: {{ config.job_name }}
+{% if config.static_configs is defined %}
+    static_configs:
+{% for static_config in config.static_configs %}
+      - targets:
+{% for target in static_config.targets %}
+          - {{ target }}
+{% endfor %}
+        labels:
+{% for key, value in static_config.labels.items() %}
+          {{ key }}: {{ value }}
+{% endfor %}
+{% endfor %}
+{% endif %}
+{% if config.journal is defined %}
+    journal:
+      json: {{ config.journal.json | lower }}
+      max_age: {{ config.journal.max_age }}
+{% if config.journal.labels is defined %}
+      labels:
+{% for key, value in config.journal.labels.items() %}
+        {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% if config.relabel_configs is defined %}
+    relabel_configs:
+{% for relabel in config.relabel_configs %}
+      - source_labels: {{ relabel.source_labels }}
+        target_label: '{{ relabel.target_label }}'
+{% endfor %}
+{% endif %}
+{% if config.pipeline_stages is defined %}
+    pipeline_stages:
+{% for stage in config.pipeline_stages %}
+{% for stage_name, stage_config in stage.items() %}
+      - {{ stage_name }}:
+{% for key, value in stage_config.items() %}
+          {{ key }}: {{ value }}
+{% endfor %}
+{% endfor %}
+{% endfor %}
+{% else %}
+    pipeline_stages:
+{% for stage in promtail_pipeline_stages %}
+{% for stage_name, stage_config in stage.items() %}
+      - {{ stage_name }}:
+{% if stage_config is mapping %}
+{% for key, value in stage_config.items() %}
+          {{ key }}: {{ value }}
+{% endfor %}
+{% else %}
+          {{ stage_config }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+# Limits configuration
+limits_config:
+  readline_rate_enabled: true
+  readline_rate: 100
+  readline_burst: 1000
+  max_streams: 1000
+
+# Target configuration
+target_config:
+  sync_period: 10s

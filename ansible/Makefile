@@ -29,6 +29,7 @@ help:
 	@echo "  deploy-alertmanager     - Deploy only Alertmanager"
 	@echo "  deploy-exporters        - Deploy Node Exporter and cAdvisor"
 	@echo "  deploy-collectors       - Deploy Promtail"
+	@echo "  deploy-promtail-host    - Deploy Promtail on app servers (non-containerized)"
 	@echo ""
 	@echo "Monitoring Stack - Management:"
 	@echo "  monitoring-status       - Check status of all monitoring services"
@@ -53,10 +54,19 @@ help:
 	@echo "  make deploy-monitoring EXTRA_VARS='monitoring_deploy_loki=false'"
 	@echo "  make deploy-prometheus EXTRA_VARS='prometheus_retention=90d'"
 	@echo "  make monitoring-logs SERVICE=prometheus"
+	@echo "  make deploy-promtail-host"
 
 # Test connectivity to monitoring server
 ping:
 	ansible monitoring_servers -m ping
+
+# Test connectivity to app servers
+ping-apps:
+	ansible app_servers -m ping
+
+# Test connectivity to all servers
+ping-all:
+	ansible all -m ping
 
 # Install Docker on the server
 install:
@@ -114,6 +124,10 @@ deploy-exporters:
 
 deploy-collectors:
 	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,promtail
+
+# Deploy Promtail directly on app servers (not in containers)
+deploy-promtail-host:
+	ansible-playbook playbooks/deploy-promtail-host.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 # Monitoring management commands
 monitoring-status:

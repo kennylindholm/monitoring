@@ -1,0 +1,29 @@
+---
+# Handlers for promtail-host role
+
+- name: restart promtail
+  systemd:
+    name: promtail
+    state: restarted
+    daemon_reload: yes
+  become: yes
+  when: promtail_service_state == "started"
+
+- name: reload promtail
+  systemd:
+    name: promtail
+    state: reloaded
+  become: yes
+  when: promtail_service_state == "started"
+  failed_when: false
+
+- name: validate promtail config
+  command: "{{ promtail_bin_path }} -config.file={{ promtail_config_file }} -check-syntax"
+  register: promtail_syntax_check
+  changed_when: false
+  failed_when: promtail_syntax_check.rc != 0
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+  become: yes

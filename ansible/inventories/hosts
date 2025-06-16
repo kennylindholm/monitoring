@@ -8,6 +8,15 @@ monitoring ansible_host=192.168.122.43 ansible_user=root
 ansible_ssh_private_key_file=~/.ssh/id_ed25519
 ansible_python_interpreter=/usr/bin/python3
 
+# Application servers with Promtail
+[app_servers]
+app1 ansible_host=192.168.122.31 ansible_user=root
+app2 ansible_host=192.168.122.94 ansible_user=root
+
+[app_servers:vars]
+ansible_ssh_private_key_file=~/.ssh/id_ed25519
+ansible_python_interpreter=/usr/bin/python3
+
 # Legacy group for backward compatibility
 [debian_servers:children]
 monitoring_servers
@@ -57,9 +66,17 @@ loki_retention_period=744h
 # Environment-specific groups (optional)
 # [production:children]
 # monitoring_servers
+# app_servers
 
 # [staging:children]
 # monitoring_servers
+# app_servers
 
 # [development:children]
 # monitoring_servers
+# app_servers
+
+# All servers that need monitoring
+[monitored:children]
+monitoring_servers
+app_servers

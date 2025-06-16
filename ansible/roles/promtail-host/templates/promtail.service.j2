@@ -1,0 +1,42 @@
+[Unit]
+Description=Promtail service
+Documentation=https://grafana.com/docs/loki/latest/clients/promtail/
+After=network.target
+
+[Service]
+Type=simple
+User={{ promtail_user }}
+Group={{ promtail_group }}
+ExecStart={{ promtail_bin_path }} -config.file={{ promtail_config_file }}
+ExecReload=/bin/kill -HUP $MAINPID
+Restart={{ 'on-failure' if promtail_restart_on_failure else 'no' }}
+RestartSec={{ promtail_restart_sec }}
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=promtail
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ promtail_data_dir }} /var/log
+ReadOnlyPaths={{ promtail_config_dir }}
+
+# Resource limits
+{% if promtail_memory_limit is defined %}
+MemoryLimit={{ promtail_memory_limit }}
+{% endif %}
+{% if promtail_cpu_limit is defined %}
+CPUQuota={{ promtail_cpu_limit }}
+{% endif %}
+
+# Capabilities
+{% if promtail_cap_add is defined %}
+{% for cap in promtail_cap_add %}
+AmbientCapabilities={{ cap }}
+{% endfor %}
+{% endif %}
+
+[Install]
+WantedBy=multi-user.target

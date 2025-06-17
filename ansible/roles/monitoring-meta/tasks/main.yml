@@ -38,14 +38,6 @@
   tags:
     - grafana
 
-- name: Deploy Node Exporter
-  include_role:
-    name: node-exporter
-  when: monitoring_deploy_node_exporter | default(true)
-  tags:
-    - node-exporter
-    - exporters
-
 - name: Deploy cAdvisor
   include_role:
     name: cadvisor
@@ -53,13 +45,6 @@
   tags:
     - cadvisor
     - exporters
-
-- name: Deploy Promtail
-  include_role:
-    name: promtail
-  when: monitoring_deploy_promtail | default(true)
-  tags:
-    - promtail
 
 - name: Wait for all services to be ready
   pause:

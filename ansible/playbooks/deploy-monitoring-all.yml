@@ -19,9 +19,12 @@
     monitoring_deploy_grafana: true
     monitoring_deploy_loki: true
     monitoring_deploy_alertmanager: true
-    monitoring_deploy_node_exporter: true
     monitoring_deploy_cadvisor: true
-    monitoring_deploy_promtail: true
+
+    # Note: Containerized node-exporter and promtail have been removed.
+    # For host-based monitoring, use:
+    # - Native node_exporter installation (see node_exporter docs)
+    # - deploy-promtail-host.yml playbook for host-based promtail
 
   pre_tasks:
     - name: Display deployment information
@@ -35,9 +38,7 @@
             - Grafana: {{ monitoring_deploy_grafana }}
             - Loki: {{ monitoring_deploy_loki }}
             - Alertmanager: {{ monitoring_deploy_alertmanager }}
-            - Node Exporter: {{ monitoring_deploy_node_exporter }}
             - cAdvisor: {{ monitoring_deploy_cadvisor }}
-            - Promtail: {{ monitoring_deploy_promtail }}
 
     - name: Ensure system packages are up to date
       package:
@@ -74,14 +75,8 @@
           {% if monitoring_deploy_alertmanager %}
           - Alertmanager {{ alertmanager_image | default('latest') }}
           {% endif %}
-          {% if monitoring_deploy_node_exporter %}
-          - Node Exporter {{ node_exporter_image | default('latest') }}
-          {% endif %}
           {% if monitoring_deploy_cadvisor %}
           - cAdvisor {{ cadvisor_image | default('latest') }}
-          {% endif %}
-          {% if monitoring_deploy_promtail %}
-          - Promtail {{ promtail_image | default('latest') }}
           {% endif %}
 
           Configuration:
@@ -131,9 +126,7 @@
               echo "Grafana: http://{{ ansible_default_ipv4.address }}:{{ grafana_port | default('3000') }}"
               echo "Loki: http://{{ ansible_default_ipv4.address }}:{{ loki_port | default('3100') }}"
               echo "Alertmanager: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port | default('9093') }}"
-              echo "Node Exporter: http://{{ ansible_default_ipv4.address }}:{{ node_exporter_port | default('9100') }}"
               echo "cAdvisor: http://{{ ansible_default_ipv4.address }}:{{ cadvisor_port | default('8080') }}"
-              echo "Promtail: http://{{ ansible_default_ipv4.address }}:{{ promtail_port | default('9080') }}"
               ;;
             *)
               echo "Usage: $0 {status|logs|restart|backup|urls} [service]"
@@ -187,9 +180,7 @@
     monitoring_deploy_grafana: true
     monitoring_deploy_loki: false
     monitoring_deploy_alertmanager: false
-    monitoring_deploy_node_exporter: true
     monitoring_deploy_cadvisor: false
-    monitoring_deploy_promtail: false
 
   roles:
     - monitoring-meta
@@ -212,9 +203,7 @@
         - "{{ grafana_image | default('grafana/grafana:latest') }}"
         - "{{ loki_image | default('grafana/loki:latest') }}"
         - "{{ alertmanager_image | default('prom/alertmanager:latest') }}"
-        - "{{ node_exporter_image | default('prom/node-exporter:latest') }}"
         - "{{ cadvisor_image | default('gcr.io/cadvisor/cadvisor:latest') }}"
-        - "{{ promtail_image | default('grafana/promtail:latest') }}"
 
     - name: Restart monitoring services
       shell: |
@@ -226,9 +215,7 @@
         - grafana
         - loki
         - alertmanager
-        - node-exporter
         - cadvisor
-        - promtail
       when: item in monitoring_deploy_components | default([])
 
 # Backup monitoring data playbook

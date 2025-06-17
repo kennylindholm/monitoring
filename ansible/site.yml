@@ -8,6 +8,10 @@
 # Deploy monitoring stack using the meta role approach (recommended)
 - import_playbook: playbooks/deploy-monitoring-all.yml
   tags: monitoring
+
+# Deploy host-based Promtail for log collection
+- import_playbook: playbooks/deploy-promtail-host.yml
+  tags: promtail-host
 # Additional playbooks can be added here as the project grows
 # Examples:
 # - import_playbook: playbooks/security.yml

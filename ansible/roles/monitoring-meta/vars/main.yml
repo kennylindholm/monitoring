@@ -7,9 +7,7 @@ monitoring_deploy_prometheus: true
 monitoring_deploy_grafana: true
 monitoring_deploy_loki: true
 monitoring_deploy_alertmanager: true
-monitoring_deploy_node_exporter: true
 monitoring_deploy_cadvisor: true
-monitoring_deploy_promtail: true
 
 # Deployment verification
 monitoring_verify_deployment: true
@@ -22,8 +20,6 @@ monitoring_component_dependencies:
     - loki
   prometheus:
     - alertmanager
-  promtail:
-    - loki
 
 # Override component variables from meta role
 # These will take precedence over individual role defaults
@@ -43,24 +39,11 @@ meta_grafana_plugins:
   - grafana-polystat-panel
 
 # Loki overrides
-meta_loki_retention_period: "744h"  # 31 days
+meta_loki_retention_period: "744h" # 31 days
 
 # Alertmanager overrides
 meta_alertmanager_smtp_enabled: false
 meta_alertmanager_slack_enabled: false
-
-# Node Exporter overrides
-meta_node_exporter_enabled_collectors:
-  - cpu
-  - cpufreq
-  - diskstats
-  - filesystem
-  - loadavg
-  - meminfo
-  - netdev
-  - stat
-  - time
-  - uname
 
 # Component health check timeouts
 monitoring_health_check_timeouts:
@@ -68,9 +51,7 @@ monitoring_health_check_timeouts:
   grafana: 120
   loki: 120
   alertmanager: 120
-  node_exporter: 60
   cadvisor: 60
-  promtail: 60
 
 # Deployment order (for future enhancements)
 monitoring_deployment_order:
@@ -79,9 +60,7 @@ monitoring_deployment_order:
   - prometheus
   - loki
   - grafana
-  - node-exporter
   - cadvisor
-  - promtail
 
 # Resource limits for components
 monitoring_resource_limits:
@@ -97,13 +76,7 @@ monitoring_resource_limits:
   alertmanager:
     memory: "256Mi"
     cpu: "250m"
-  node_exporter:
-    memory: "128Mi"
-    cpu: "100m"
   cadvisor:
-    memory: "256Mi"
-    cpu: "250m"
-  promtail:
     memory: "256Mi"
     cpu: "250m"
 
@@ -150,7 +123,7 @@ monitoring_notifications:
 # Backup configuration
 monitoring_backup_config:
   enabled: true
-  schedule: "0 2 * * *"  # Daily at 2 AM
+  schedule: "0 2 * * *" # Daily at 2 AM
   retention_days: 7
   backup_components:
     - prometheus

@@ -35,25 +35,11 @@ dependencies:
       grafana_network_name: "{{ monitoring_global_config.network_name | default('monitoring') }}"
       grafana_network_external: true
 
-  - role: node-exporter
-    when: monitoring_deploy_node_exporter | default(true)
-    vars:
-      node_exporter_enabled_collectors: "{{ meta_node_exporter_enabled_collectors | default(['systemd', 'filesystem', 'diskstats', 'netdev', 'meminfo', 'loadavg', 'cpu']) }}"
-      node_exporter_network_name: "{{ monitoring_global_config.network_name | default('monitoring') }}"
-      node_exporter_network_external: true
-
   - role: cadvisor
     when: monitoring_deploy_cadvisor | default(true)
     vars:
       cadvisor_network_name: "{{ monitoring_global_config.network_name | default('monitoring') }}"
       cadvisor_network_external: true
-
-  - role: promtail
-    when: monitoring_deploy_promtail | default(true)
-    vars:
-      promtail_loki_url: "http://loki:3100/loki/api/v1/push"
-      promtail_network_name: "{{ monitoring_global_config.network_name | default('monitoring') }}"
-      promtail_network_external: true
 
 galaxy_info:
   author: monitoring-team

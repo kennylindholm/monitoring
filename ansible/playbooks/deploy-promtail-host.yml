@@ -100,38 +100,118 @@
         path: /opt/monitoring/prometheus/configs/prometheus.yml
       register: prometheus_config
 
-    - name: Generate Promtail targets configuration
-      set_fact:
-        promtail_job_config: |
-          - job_name: 'promtail'
-            static_configs:
-              - targets:
-                  - '{{ hostvars["app1"]["ansible_host"] }}:9080'
-                  - '{{ hostvars["app2"]["ansible_host"] }}:9080'
-            relabel_configs:
-              - source_labels: [__address__]
-                regex: '([^:]+):.*'
-                target_label: instance
-                replacement: '$1'
-
-    - name: Add Promtail targets to Prometheus
-      blockinfile:
-        path: /opt/monitoring/prometheus/configs/prometheus.yml
-        marker: "# {mark} ANSIBLE MANAGED BLOCK - Promtail targets"
-        block: "{{ promtail_job_config }}"
-        insertafter: "scrape_configs:"
+    - name: Read current Prometheus configuration
+      slurp:
+        src: /opt/monitoring/prometheus/configs/prometheus.yml
+      register: prometheus_config_content
       when: prometheus_config.stat.exists
+
+    - name: Check if Promtail job already exists
+      set_fact:
+        promtail_exists: '{{ ''job_name: "promtail"'' in (prometheus_config_content.content | b64decode) or "job_name: ''promtail''" in (prometheus_config_content.content | b64decode) }}'
+      when: prometheus_config.stat.exists
+
+    - name: Add Promtail job to Prometheus configuration
+      lineinfile:
+        path: /opt/monitoring/prometheus/configs/prometheus.yml
+        line: |2
+            - job_name: "promtail"
+              static_configs:
+                - targets:
+                    - "{{ hostvars['app1']['ansible_host'] }}:9080"
+                    - "{{ hostvars['app2']['ansible_host'] }}:9080"
+              relabel_configs:
+                - source_labels: [__address__]
+                  regex: "([^:]+):.*"
+                  target_label: instance
+                  replacement: "$1"
+        insertafter: "^scrape_configs:"
+        state: present
+      when:
+        - prometheus_config.stat.exists
+        - not promtail_exists | default(false)
       notify: reload prometheus
 
     - name: Validate Prometheus configuration
       command: |
         docker run --rm \
           -v /opt/monitoring/prometheus/configs/prometheus.yml:/prometheus.yml \
+          -v /opt/monitoring/prometheus/configs/alert-rules.yml:/etc/prometheus/alert-rules.yml \
           --entrypoint promtool \
           prom/prometheus:latest \
           check config /prometheus.yml
       when: prometheus_config.stat.exists
       changed_when: false
+      register: config_validation
+      failed_when: false
+
+    - name: Fix Prometheus configuration if validation failed
+      block:
+        - name: Copy fixed Prometheus configuration
+          copy:
+            content: |
+              global:
+                scrape_interval: 15s
+                evaluation_interval: 15s
+                external_labels:
+                  monitor: "monitoring-system"
+
+              rule_files:
+                - "/etc/prometheus/alert-rules.yml"
+
+              alerting:
+                alertmanagers:
+                  - static_configs:
+                      - targets:
+                          - alertmanager:9093
+
+              scrape_configs:
+                - job_name: "prometheus"
+                  static_configs:
+                    - targets: ["localhost:9090"]
+
+                - job_name: "cadvisor"
+                  static_configs:
+                    - targets: ["cadvisor:8080"]
+
+                - job_name: "alertmanager"
+                  static_configs:
+                    - targets: ["alertmanager:9093"]
+
+                - job_name: "grafana"
+                  static_configs:
+                    - targets: ["grafana:3000"]
+
+                - job_name: "loki"
+                  static_configs:
+                    - targets: ["loki:3100"]
+
+                - job_name: "promtail"
+                  static_configs:
+                    - targets:
+                        - "{{ hostvars['app1']['ansible_host'] }}:9080"
+                        - "{{ hostvars['app2']['ansible_host'] }}:9080"
+                  relabel_configs:
+                    - source_labels: [__address__]
+                      regex: "([^:]+):.*"
+                      target_label: instance
+                      replacement: "$1"
+            dest: /opt/monitoring/prometheus/configs/prometheus.yml
+            backup: yes
+          notify: reload prometheus
+
+        - name: Validate fixed configuration
+          command: |
+            docker run --rm \
+              -v /opt/monitoring/prometheus/configs/prometheus.yml:/prometheus.yml \
+              -v /opt/monitoring/prometheus/configs/alert-rules.yml:/etc/prometheus/alert-rules.yml \
+              --entrypoint promtool \
+              prom/prometheus:latest \
+              check config /prometheus.yml
+          changed_when: false
+      when:
+        - prometheus_config.stat.exists
+        - config_validation.rc != 0
 
   handlers:
     - name: reload prometheus

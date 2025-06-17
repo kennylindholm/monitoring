@@ -23,7 +23,7 @@
 
     - name: Ensure system is updated (RedHat)
       yum:
-        name: '*'
+        name: "*"
         state: latest
         update_cache: yes
       when: ansible_os_family == "RedHat"
@@ -38,21 +38,18 @@
       tags: [prometheus, metrics]
       vars:
         prometheus_scrape_configs:
-          - job_name: 'prometheus'
+          - job_name: "prometheus"
             static_configs:
-              - targets: ['localhost:9090']
-          - job_name: 'node-exporter'
+              - targets: ["localhost:9090"]
+          - job_name: "cadvisor"
             static_configs:
-              - targets: ['node-exporter:9100']
-          - job_name: 'cadvisor'
-            static_configs:
-              - targets: ['cadvisor:8080']
+              - targets: ["cadvisor:8080"]
 
     - role: alertmanager
       tags: [alertmanager, alerts]
       vars:
         alertmanager_receivers:
-          - name: 'default'
+          - name: "default"
             email_configs: []
             slack_configs: []
             webhook_configs: []
@@ -75,9 +72,6 @@
             url: "http://loki:3100"
 
     # Deploy exporters
-    - role: node-exporter
-      tags: [node-exporter, exporters, metrics]
-
     - role: cadvisor
       tags: [cadvisor, exporters, metrics]
 
@@ -106,7 +100,7 @@
       template:
         src: monitoring-summary.txt.j2
         dest: "{{ monitoring_base_dir }}/MONITORING_SUMMARY.txt"
-        mode: '0644'
+        mode: "0644"
       vars:
         deployment_date: "{{ ansible_date_time.iso8601 }}"
 
@@ -236,7 +230,6 @@
       include_role:
         name: promtail
       when: deploy_promtail
-
 # Usage examples:
 # Deploy everything:
 # ansible-playbook -i inventory deploy-monitoring-individual.yml

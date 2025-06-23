@@ -1,10 +1,10 @@
 # Ansible Monitoring Stack Makefile
 # Common operations for managing Docker and Monitoring Stack via Ansible
 
-.PHONY: help ping install install-update check syntax lint clean test \
-        deploy-monitoring deploy-monitoring-minimal \
+.PHONY: help ping install check syntax lint clean docker-status \
+        deploy-monitoring-all \
         deploy-prometheus deploy-grafana deploy-loki deploy-alertmanager \
-        deploy-exporters deploy-collectors monitoring-status monitoring-logs \
+        deploy-exporters monitoring-status monitoring-logs \
         monitoring-stop monitoring-start monitoring-restart monitoring-health \
         monitoring-backup monitoring-update monitoring-check
 
@@ -12,24 +12,23 @@
 help:
 	@echo "Available targets:"
 	@echo ""
-	@echo "Docker Installation:"
+	@echo "Connectivity & Testing:"
 	@echo "  ping                    - Test connectivity to monitoring server"
-	@echo "  install                 - Install Docker on the server"
-	@echo "  install-update          - Install Docker with system updates"
-	@echo "  test                    - Test Docker installation"
+	@echo "  ping-hosts              - Test connectivity to hosts servers"
+	@echo "  ping-all                - Test connectivity to all servers"
+	@echo ""
+	@echo "Docker Installation (Docker only, no monitoring):"
+	@echo "  docker-install          - Install Docker and Docker Compose only"
+	@echo "  docker-status           - Test Docker installation"
 	@echo ""
 	@echo "Monitoring Stack - Deployment:"
-	@echo "  deploy-monitoring       - Deploy all monitoring components (recommended)"
-	@echo "  deploy-monitoring-minimal - Deploy minimal stack (Prometheus + Grafana)"
-	@echo ""
-	@echo "Monitoring Stack - Individual Components:"
-	@echo "  deploy-prometheus       - Deploy only Prometheus"
+	@echo "  deploy-monitoring-all   - Deploy all monitoring components (recommended)"
 	@echo "  deploy-grafana          - Deploy only Grafana"
 	@echo "  deploy-loki             - Deploy only Loki"
+	@echo "  deploy-promtail-host    - Deploy Promtail on client hosts (non-containerized)"
+	@echo "  deploy-prometheus       - Deploy only Prometheus"
 	@echo "  deploy-alertmanager     - Deploy only Alertmanager"
 	@echo "  deploy-exporters        - Deploy Node Exporter and cAdvisor"
-	@echo "  deploy-collectors       - Deploy Promtail"
-	@echo "  deploy-promtail-host    - Deploy Promtail on app servers (non-containerized)"
 	@echo ""
 	@echo "Monitoring Stack - Management:"
 	@echo "  monitoring-status       - Check status of all monitoring services"
@@ -41,27 +40,59 @@ help:
 	@echo "  monitoring-backup       - Backup monitoring data"
 	@echo "  monitoring-update       - Update monitoring components"
 	@echo "  monitoring-check        - Run monitoring service check script"
+	@echo "  monitoring-urls         - Show monitoring URLs"
+	@echo "  monitoring-disk-usage   - Show disk usage for monitoring"
 	@echo ""
-	@echo "Development:"
+	@echo "Individual Component Management:"
+	@echo "  restart-prometheus      - Restart Prometheus service"
+	@echo "  restart-grafana         - Restart Grafana service"
+	@echo "  restart-loki            - Restart Loki service"
+	@echo "  restart-alertmanager    - Restart Alertmanager service"
+	@echo "  tail-logs               - Tail logs for specific service (requires SERVICE=name)"
+	@echo ""
+	@echo "System & Configuration:"
+	@echo "  inventory               - Show Ansible inventory"
+	@echo "  facts                   - Show facts for monitoring servers"
+	@echo "  validate-config         - Validate monitoring configuration"
+	@echo "  show-versions           - Show deployed component versions"
+	@echo ""
+	@echo "Development & Testing:"
 	@echo "  check                   - Run playbook in check mode (dry run)"
 	@echo "  syntax                  - Check playbook syntax"
 	@echo "  lint                    - Lint playbooks with ansible-lint"
+	@echo "  test-role               - Test specific role (requires ROLE=name)"
 	@echo "  clean                   - Clean up temporary files"
+	@echo ""
+	@echo "Security & Vault:"
+	@echo "  create-vault            - Create new Ansible vault file"
+	@echo "  edit-vault              - Edit existing Ansible vault file"
+	@echo ""
+	@echo "Convenient Aliases:"
+	@echo "  status                  - Alias for monitoring-status"
+	@echo "  logs                    - Alias for monitoring-logs"
+	@echo "  start                   - Alias for monitoring-start"
+	@echo "  stop                    - Alias for monitoring-stop"
+	@echo "  restart                 - Alias for monitoring-restart"
+	@echo "  backup                  - Alias for monitoring-backup"
+	@echo "  urls                    - Alias for monitoring-urls"
 	@echo "  help                    - Show this help message"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make deploy-monitoring"
-	@echo "  make deploy-monitoring EXTRA_VARS='monitoring_deploy_loki=false'"
+	@echo "  make deploy-monitoring-all"
+	@echo "  make deploy-monitoring-all EXTRA_VARS='monitoring_deploy_loki=false'"
 	@echo "  make deploy-prometheus EXTRA_VARS='prometheus_retention=90d'"
 	@echo "  make monitoring-logs SERVICE=prometheus"
+	@echo "  make tail-logs SERVICE=grafana"
 	@echo "  make deploy-promtail-host"
+	@echo "  make test-role ROLE=prometheus"
+
 
 # Test connectivity to monitoring server
 ping:
 	ansible monitoring_servers -m ping
 
 # Test connectivity to app servers
-ping-apps:
+ping-hosts:
 	ansible app_servers -m ping
 
 # Test connectivity to all servers
@@ -69,12 +100,10 @@ ping-all:
 	ansible all -m ping
 
 # Install Docker on the server
-install:
-	ansible-playbook site.yml
+docker-install:
+	ansible-playbook playbooks/install-docker.yml
 
-# Install Docker with system updates
-install-update:
-	ansible-playbook site.yml -e "update_system=true"
+
 
 # Run in check mode (dry run)
 check:
@@ -94,17 +123,15 @@ lint:
 	ansible-lint playbooks/deploy-monitoring-individual.yml
 
 # Test Docker installation
-test:
+docker-status:
 	ansible monitoring_servers -a "docker --version"
 	ansible monitoring_servers -a "docker compose version"
 
 # Deploy all monitoring components (recommended)
-deploy-monitoring:
+deploy-monitoring-all:
 	ansible-playbook playbooks/deploy-monitoring-all.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
-# Deploy minimal monitoring stack
-deploy-monitoring-minimal:
-	ansible-playbook playbooks/deploy-monitoring-all.yml --tags minimal
+
 
 # Deploy individual components
 deploy-prometheus:
@@ -122,10 +149,9 @@ deploy-alertmanager:
 deploy-exporters:
 	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,exporters
 
-deploy-collectors:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,promtail
 
-# Deploy Promtail directly on app servers (not in containers)
+
+# Deploy Promtail directly on host servers (not in containers)
 deploy-promtail-host:
 	ansible-playbook playbooks/deploy-promtail-host.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
@@ -200,9 +226,7 @@ inventory:
 facts:
 	ansible monitoring_servers -m setup
 
-# Update system packages only
-update-system:
-	ansible monitoring_servers -m apt -a "upgrade=dist update_cache=yes autoremove=yes" --become
+
 
 # Validate monitoring configuration
 validate-config:
@@ -225,21 +249,9 @@ ANSIBLE_ARGS ?=
 EXTRA_VARS ?=
 SERVICE ?=
 
-# Advanced deployment examples
-deploy-with-ssl:
-	ansible-playbook playbooks/deploy-monitoring-all.yml -e "monitoring_ssl_enabled=true monitoring_domain=monitoring.example.com"
 
-deploy-with-auth:
-	ansible-playbook playbooks/deploy-monitoring-all.yml -e "monitoring_enable_basic_auth=true grafana_admin_password=$${GRAFANA_PASSWORD}"
 
-# Migration helper
-migrate-monitoring:
-	@echo "Migrating to new modular monitoring structure..."
-	@echo "1. Backing up existing data..."
-	@ansible monitoring_servers -m shell -a "[ -d /opt/monitoring ] && tar -czf /opt/monitoring-backup-$$(date +%Y%m%d-%H%M%S).tar.gz /opt/monitoring || echo 'No existing installation found'" --become
-	@echo "2. Deploying new structure..."
-	@$(MAKE) deploy-monitoring
-	@echo "Migration complete. Please verify all services are running."
+
 
 # Development helpers
 test-role:

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration - VMs to manage
-VMS="debian12 debian12-clone1 debian12-clone2 debian12-clone3 debian12-monitoringtest"
+VMS="debian12 debian12-clone1 debian12-clone2 debian12-clone3"
 
 # Function to display usage information
 usage() {

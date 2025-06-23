@@ -75,12 +75,6 @@
     - role: cadvisor
       tags: [cadvisor, exporters, metrics]
 
-    # Deploy log collectors
-    - role: promtail
-      tags: [promtail, logs]
-      vars:
-        promtail_loki_url: "http://loki:3100/loki/api/v1/push"
-
   post_tasks:
     - name: Wait for all services to stabilize
       pause:
@@ -120,7 +114,9 @@
           - Alertmanager: http://{{ ansible_default_ipv4.address }}:9093
           - Node Exporter: http://{{ ansible_default_ipv4.address }}:9100
           - cAdvisor: http://{{ ansible_default_ipv4.address }}:8080
-          - Promtail: http://{{ ansible_default_ipv4.address }}:9080
+
+          Note: Promtail runs on client hosts (app_servers)
+          To deploy Promtail: ansible-playbook playbooks/deploy-promtail-host.yml
 
           Configuration files: {{ monitoring_base_dir }}
 
@@ -226,9 +222,9 @@
         - cadvisor
       when: deploy_exporters
 
-    - name: Deploy Promtail only
-      include_role:
-        name: promtail
+    - name: Note about Promtail deployment
+      debug:
+        msg: "Promtail should be deployed on client hosts using deploy-promtail-host.yml playbook"
       when: deploy_promtail
 # Usage examples:
 # Deploy everything:
@@ -242,3 +238,58 @@
 #
 # Deploy specific components only:
 # ansible-playbook -i inventory deploy-monitoring-individual.yml --tags selective -e prometheus=true -e grafana=true
+#
+# Deploy Promtail on client hosts:
+# ansible-playbook -i inventory playbooks/deploy-promtail-host.yml
+
+# Promtail deployment on client hosts
+- name: Deploy Promtail to Application Servers
+  hosts: app_servers
+  become: yes
+  gather_facts: yes
+  tags: [promtail-clients, never]
+
+  pre_tasks:
+    - name: Display deployment information
+      debug:
+        msg: |
+          Starting Promtail deployment to application servers...
+          Target hosts: {{ ansible_play_hosts | join(', ') }}
+          Loki server: {{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:3100
+
+    - name: Verify connectivity to all hosts
+      ping:
+
+    - name: Check if Loki is accessible
+      uri:
+        url: "http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:3100/ready"
+        method: GET
+        status_code: 200
+        timeout: 10
+      delegate_to: localhost
+      run_once: true
+      register: loki_check
+      failed_when: false
+
+    - name: Warn if Loki is not accessible
+      debug:
+        msg: "WARNING: Loki server is not accessible. Promtail will be installed but may not be able to send logs."
+      when: loki_check is failed or loki_check.status is not defined or loki_check.status != 200
+      run_once: true
+
+  roles:
+    - role: promtail-host
+
+  post_tasks:
+    - name: Verify Promtail installation
+      systemd:
+        name: promtail
+      register: promtail_status
+
+    - name: Display Promtail status
+      debug:
+        msg: |
+          Promtail deployment completed on {{ inventory_hostname }}
+          Service status: {{ promtail_status.status.ActiveState }}
+          Metrics: http://{{ ansible_default_ipv4.address }}:9080/metrics
+          Targets: http://{{ ansible_default_ipv4.address }}:9080/targets

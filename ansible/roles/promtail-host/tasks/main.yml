@@ -118,13 +118,21 @@
   become: yes
   when: promtail_cap_add is defined
 
-- name: Ensure log files are readable by promtail
-  file:
+- name: Check which log files exist
+  stat:
     path: "{{ item }}"
-    mode: "0644"
   loop:
     - /var/log/syslog
     - /var/log/auth.log
+  register: log_files_stat
+  become: yes
+
+- name: Ensure existing log files are readable by promtail
+  file:
+    path: "{{ item.item }}"
+    mode: "0644"
+  loop: "{{ log_files_stat.results }}"
+  when: item.stat.exists
   become: yes
   failed_when: false
 

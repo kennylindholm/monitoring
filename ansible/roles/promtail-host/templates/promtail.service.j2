@@ -25,7 +25,7 @@ ReadOnlyPaths={{ promtail_config_dir }}
 
 # Resource limits
 {% if promtail_memory_limit is defined %}
-MemoryLimit={{ promtail_memory_limit }}
+MemoryMax={{ promtail_memory_limit }}
 {% endif %}
 {% if promtail_cpu_limit is defined %}
 CPUQuota={{ promtail_cpu_limit }}

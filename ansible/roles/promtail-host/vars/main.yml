@@ -44,23 +44,14 @@ promtail_scrape_configs:
           host: "{{ inventory_hostname }}"
           __path__: /var/log/*.log
 
-  - job_name: syslog
+  - job_name: apt
     static_configs:
       - targets:
           - localhost
         labels:
-          job: syslog
+          job: apt
           host: "{{ inventory_hostname }}"
-          __path__: /var/log/syslog
-
-  - job_name: auth
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: auth
-          host: "{{ inventory_hostname }}"
-          __path__: /var/log/auth.log
+          __path__: /var/log/apt/*.log
 
   - job_name: journal
     journal:
@@ -70,8 +61,20 @@ promtail_scrape_configs:
         job: systemd-journal
         host: "{{ inventory_hostname }}"
     relabel_configs:
-      - source_labels: ['__journal__systemd_unit']
-        target_label: 'unit'
+      - source_labels: ["__journal__systemd_unit"]
+        target_label: "unit"
+
+  - job_name: auth-journal
+    journal:
+      json: false
+      max_age: 12h
+      labels:
+        job: auth
+        host: "{{ inventory_hostname }}"
+      matches: _SYSTEMD_UNIT=ssh.service
+    relabel_configs:
+      - source_labels: ["__journal__systemd_unit"]
+        target_label: "unit"
 
 # Pipeline stages for log processing
 promtail_pipeline_stages:
@@ -102,7 +105,7 @@ promtail_external_labels:
 
 # Resource limits
 promtail_memory_limit: "512M"
-promtail_cpu_limit: "500m"
+promtail_cpu_limit: "50%"
 
 # Log rotation
 promtail_log_level: "info"
@@ -110,7 +113,7 @@ promtail_log_format: "logfmt"
 
 # Security
 promtail_cap_add:
-  - CAP_DAC_READ_SEARCH  # Allows reading files that the user doesn't own
+  - CAP_DAC_READ_SEARCH # Allows reading files that the user doesn't own
 
 # Systemd service settings
 promtail_service_enabled: true

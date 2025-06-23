@@ -1,8 +1,8 @@
 ---
 - name: Deploy Promtail to Application Servers
   hosts: client_hosts
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   pre_tasks:
     - name: Display deployment information
@@ -87,8 +87,8 @@
 
 - name: Update Prometheus configuration to scrape Promtail metrics
   hosts: monitoring_servers
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
   tags: prometheus_config
 
   tasks:

@@ -1,8 +1,8 @@
 ---
 - name: Deploy cAdvisor
   hosts: monitoring_servers
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   vars:
     # Override default variables as needed
@@ -143,7 +143,7 @@
 
 - name: Configure cAdvisor
   hosts: monitoring_servers
-  become: yes
+  become: true
   gather_facts: no
   tags: [configure, never]
 
@@ -208,7 +208,7 @@
 # Advanced configuration playbook for specific container monitoring
 - name: Advanced cAdvisor Configuration
   hosts: monitoring_servers
-  become: yes
+  become: true
   gather_facts: no
   tags: [advanced, never]
 

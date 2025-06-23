@@ -2,9 +2,10 @@
 # Common operations for managing Docker and Monitoring Stack via Ansible
 
 .PHONY: help ping install check syntax lint clean docker-status \
-        deploy-monitoring-all \
+        deploy-monitoring-all deploy-monitoring-individual \
         deploy-prometheus deploy-grafana deploy-loki deploy-alertmanager \
-        deploy-exporters monitoring-status monitoring-logs \
+        deploy-node-exporter deploy-cadvisor deploy-promtail \
+        monitoring-status monitoring-logs \
         monitoring-stop monitoring-start monitoring-restart monitoring-health \
         monitoring-backup monitoring-update monitoring-check
 
@@ -13,22 +14,28 @@ help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "Connectivity & Testing:"
-	@echo "  ping                    - Test connectivity to monitoring server"
-	@echo "  ping-hosts              - Test connectivity to hosts servers"
+	@echo "  ping                    - Test connectivity to monitoring servers"
+	@echo "  ping-clients            - Test connectivity to client hosts"
 	@echo "  ping-all                - Test connectivity to all servers"
 	@echo ""
-	@echo "Docker Installation (Docker only, no monitoring):"
-	@echo "  docker-install          - Install Docker and Docker Compose only"
+	@echo "Docker Installation:"
+	@echo "  docker-install          - Install Docker and Docker Compose"
 	@echo "  docker-status           - Test Docker installation"
 	@echo ""
-	@echo "Monitoring Stack - Deployment:"
+	@echo "Monitoring Stack - Full Deployment:"
 	@echo "  deploy-monitoring-all   - Deploy all monitoring components (recommended)"
+	@echo "  deploy-monitoring-individual - Deploy using individual roles"
+	@echo ""
+	@echo "Monitoring Stack - Individual Components:"
+	@echo "  deploy-prometheus       - Deploy only Prometheus"
 	@echo "  deploy-grafana          - Deploy only Grafana"
 	@echo "  deploy-loki             - Deploy only Loki"
-	@echo "  deploy-promtail         - Deploy Promtail on client hosts (non-containerized)"
-	@echo "  deploy-prometheus       - Deploy only Prometheus"
 	@echo "  deploy-alertmanager     - Deploy only Alertmanager"
-	@echo "  deploy-exporters        - Deploy Node Exporter and cAdvisor"
+	@echo ""
+	@echo "Exporters & Log Shipping:"
+	@echo "  deploy-node-exporter    - Deploy Node Exporter on client hosts"
+	@echo "  deploy-cadvisor         - Deploy cAdvisor on monitoring servers"
+	@echo "  deploy-promtail         - Deploy Promtail on client hosts"
 	@echo ""
 	@echo "Monitoring Stack - Management:"
 	@echo "  monitoring-status       - Check status of all monitoring services"
@@ -48,6 +55,7 @@ help:
 	@echo "  restart-grafana         - Restart Grafana service"
 	@echo "  restart-loki            - Restart Loki service"
 	@echo "  restart-alertmanager    - Restart Alertmanager service"
+	@echo "  restart-cadvisor        - Restart cAdvisor service"
 	@echo "  tail-logs               - Tail logs for specific service (requires SERVICE=name)"
 	@echo ""
 	@echo "System & Configuration:"
@@ -86,24 +94,26 @@ help:
 	@echo "  make deploy-promtail"
 	@echo "  make test-role ROLE=prometheus"
 
-
-# Test connectivity to monitoring server
+# Test connectivity to monitoring servers
 ping:
 	ansible monitoring_servers -m ping
 
-# Test connectivity to app servers
-ping-hosts:
-	ansible app_servers -m ping
+# Test connectivity to client hosts (app servers)
+ping-clients:
+	ansible client_hosts -m ping
 
 # Test connectivity to all servers
 ping-all:
 	ansible all -m ping
 
-# Install Docker on the server
+# Install Docker on servers
 docker-install:
-	ansible-playbook playbooks/install-docker.yml
+	ansible-playbook playbooks/install-docker.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
-
+# Test Docker installation
+docker-status:
+	ansible monitoring_servers -a "docker --version"
+	ansible monitoring_servers -a "docker compose version"
 
 # Run in check mode (dry run)
 check:
@@ -114,6 +124,10 @@ syntax:
 	ansible-playbook site.yml --syntax-check
 	ansible-playbook playbooks/deploy-monitoring-all.yml --syntax-check
 	ansible-playbook playbooks/deploy-monitoring-individual.yml --syntax-check
+	ansible-playbook playbooks/deploy-node-exporter.yml --syntax-check
+	ansible-playbook playbooks/deploy-cadvisor.yml --syntax-check
+	ansible-playbook playbooks/deploy-promtail.yml --syntax-check
+	ansible-playbook playbooks/install-docker.yml --syntax-check
 
 # Lint playbooks (requires ansible-lint)
 lint:
@@ -121,37 +135,40 @@ lint:
 	ansible-lint site.yml
 	ansible-lint playbooks/deploy-monitoring-all.yml
 	ansible-lint playbooks/deploy-monitoring-individual.yml
+	ansible-lint playbooks/deploy-node-exporter.yml
+	ansible-lint playbooks/deploy-cadvisor.yml
+	ansible-lint playbooks/deploy-promtail.yml
+	ansible-lint playbooks/install-docker.yml
 
-# Test Docker installation
-docker-status:
-	ansible monitoring_servers -a "docker --version"
-	ansible monitoring_servers -a "docker compose version"
-
-# Deploy all monitoring components (recommended)
+# Deploy all monitoring components using meta role (recommended)
 deploy-monitoring-all:
 	ansible-playbook playbooks/deploy-monitoring-all.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
+# Deploy monitoring components using individual roles
+deploy-monitoring-individual:
+	ansible-playbook playbooks/deploy-monitoring-individual.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
-
-# Deploy individual components
+# Deploy individual components using role-specific tags
 deploy-prometheus:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,prometheus
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags prometheus $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 deploy-grafana:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,grafana
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags grafana $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 deploy-loki:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,loki
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags loki $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 deploy-alertmanager:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,alertmanager
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags alertmanager $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
-deploy-exporters:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags common,exporters
+# Deploy exporters using dedicated playbooks
+deploy-node-exporter:
+	ansible-playbook playbooks/deploy-node-exporter.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
+deploy-cadvisor:
+	ansible-playbook playbooks/deploy-cadvisor.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
-
-# Deploy Promtail directly on host servers (not in containers)
+# Deploy Promtail on client hosts
 deploy-promtail:
 	ansible-playbook playbooks/deploy-promtail.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
@@ -160,24 +177,24 @@ monitoring-status:
 	@if [ -f /opt/monitoring/scripts/check-services.sh ]; then \
 		ansible monitoring_servers -a "/opt/monitoring/scripts/check-services.sh" --become; \
 	else \
-		ansible monitoring_servers -m shell -a "cd /opt/monitoring && for service in prometheus grafana loki alertmanager node-exporter cadvisor promtail; do echo \"Checking \$$service...\"; docker ps | grep \$$service || echo \"\$$service not running\"; done" --become; \
+		ansible monitoring_servers -m shell -a "cd /opt/monitoring && for service in prometheus grafana loki alertmanager cadvisor; do echo \"Checking \$$service...\"; docker ps | grep \$$service || echo \"\$$service not running\"; done" --become; \
 	fi
 
 monitoring-logs:
 	@if [ -n "$(SERVICE)" ]; then \
 		ansible monitoring_servers -m shell -a "docker logs --tail 100 -f $(SERVICE)" --become; \
 	else \
-		ansible monitoring_servers -m shell -a "cd /opt/monitoring && for service in prometheus grafana loki alertmanager; do echo \"=== \$$service logs ===\"; docker logs --tail 50 \$$service 2>&1; echo; done" --become; \
+		ansible monitoring_servers -m shell -a "cd /opt/monitoring && for service in prometheus grafana loki alertmanager cadvisor; do echo \"=== \$$service logs ===\"; docker logs --tail 50 \$$service 2>&1; echo; done" --become; \
 	fi
 
 monitoring-start:
-	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager node-exporter cadvisor promtail; do [ -d \$$dir ] && cd \$$dir && docker compose up -d && cd ..; done" --become
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager cadvisor; do [ -d \$$dir ] && cd \$$dir && docker compose up -d && cd ..; done" --become
 
 monitoring-stop:
-	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager node-exporter cadvisor promtail; do [ -d \$$dir ] && cd \$$dir && docker compose down && cd ..; done" --become
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager cadvisor; do [ -d \$$dir ] && cd \$$dir && docker compose down && cd ..; done" --become
 
 monitoring-restart:
-	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager node-exporter cadvisor promtail; do [ -d \$$dir ] && cd \$$dir && docker compose restart && cd ..; done" --become
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager cadvisor; do [ -d \$$dir ] && cd \$$dir && docker compose restart && cd ..; done" --become
 
 monitoring-health:
 	@echo "Running health checks on monitoring services..."
@@ -185,6 +202,7 @@ monitoring-health:
 	@ansible monitoring_servers -m uri -a "url=http://localhost:3000/api/health" --become || echo "Grafana not healthy"
 	@ansible monitoring_servers -m uri -a "url=http://localhost:3100/ready" --become || echo "Loki not healthy"
 	@ansible monitoring_servers -m uri -a "url=http://localhost:9093/-/ready" --become || echo "Alertmanager not healthy"
+	@ansible monitoring_servers -m uri -a "url=http://localhost:8080/healthz" --become || echo "cAdvisor not healthy"
 
 monitoring-check:
 	ansible monitoring_servers -a "/opt/monitoring/scripts/check-services.sh" --become
@@ -193,11 +211,11 @@ monitoring-backup:
 	ansible monitoring_servers -a "/opt/monitoring/backup-monitoring.sh" --become
 
 monitoring-update:
-	ansible-playbook playbooks/deploy-monitoring-all.yml --tags update
+	ansible-playbook playbooks/deploy-monitoring-all.yml --tags update $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 # Show monitoring URLs
 monitoring-urls:
-	@ansible monitoring_servers -m shell -a "echo 'Monitoring Stack URLs:' && echo '=====================' && echo 'Prometheus: http://'\$$(hostname -I | awk '{print \$$1}')':9090' && echo 'Grafana: http://'\$$(hostname -I | awk '{print \$$1}')':3000' && echo 'Loki: http://'\$$(hostname -I | awk '{print \$$1}')':3100' && echo 'Alertmanager: http://'\$$(hostname -I | awk '{print \$$1}')':9093'" --become
+	@ansible monitoring_servers -m shell -a "echo 'Monitoring Stack URLs:' && echo '=====================' && echo 'Prometheus: http://'\$$(hostname -I | awk '{print \$$1}')':9090' && echo 'Grafana: http://'\$$(hostname -I | awk '{print \$$1}')':3000' && echo 'Loki: http://'\$$(hostname -I | awk '{print \$$1}')':3100' && echo 'Alertmanager: http://'\$$(hostname -I | awk '{print \$$1}')':9093' && echo 'cAdvisor: http://'\$$(hostname -I | awk '{print \$$1}')':8080'" --become
 
 # Component-specific operations
 restart-prometheus:
@@ -212,6 +230,9 @@ restart-loki:
 restart-alertmanager:
 	ansible monitoring_servers -m shell -a "cd /opt/monitoring/alertmanager && docker compose restart" --become
 
+restart-cadvisor:
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring/cadvisor && docker compose restart" --become
+
 # Clean up temporary files
 clean:
 	find . -name "*.retry" -delete
@@ -222,11 +243,9 @@ clean:
 inventory:
 	ansible-inventory --list
 
-# Show facts for the server
+# Show facts for monitoring servers
 facts:
 	ansible monitoring_servers -m setup
-
-
 
 # Validate monitoring configuration
 validate-config:
@@ -244,19 +263,12 @@ tail-logs:
 	@if [ -z "$(SERVICE)" ]; then echo "Usage: make tail-logs SERVICE=prometheus"; exit 1; fi
 	ansible monitoring_servers -m shell -a "docker logs -f --tail 100 $(SERVICE)" --become
 
-# Variables that can be overridden
-ANSIBLE_ARGS ?=
-EXTRA_VARS ?=
-SERVICE ?=
-
-
-
-
-
 # Development helpers
 test-role:
 	@if [ -z "$(ROLE)" ]; then echo "Usage: make test-role ROLE=prometheus"; exit 1; fi
-	ansible-playbook -i inventory tests/test-$(ROLE).yml
+	@if [ ! -d "roles/$(ROLE)" ]; then echo "Role $(ROLE) does not exist"; exit 1; fi
+	@echo "Testing role: $(ROLE)"
+	ansible-playbook -i inventories/hosts --check playbooks/deploy-monitoring-individual.yml --tags $(ROLE)
 
 create-vault:
 	ansible-vault create group_vars/all/vault.yml
@@ -267,7 +279,16 @@ edit-vault:
 # Show component versions
 show-versions:
 	@echo "Checking deployed component versions..."
-	@ansible monitoring_servers -m shell -a "docker ps --format 'table {{.Names}}\t{{.Image}}' | grep -E 'prometheus|grafana|loki|alertmanager|node-exporter|cadvisor|promtail'" --become
+	@ansible monitoring_servers -m shell -a "docker ps --format 'table {{.Names}}\t{{.Image}}' | grep -E 'prometheus|grafana|loki|alertmanager|cadvisor'" --become
+	@echo "Checking Promtail versions on client hosts..."
+	@ansible client_hosts -m shell -a "systemctl status promtail | grep Active" --become
+
+# Check client hosts exporters
+check-exporters:
+	@echo "Checking Node Exporter on client hosts..."
+	@ansible client_hosts -m uri -a "url=http://localhost:9100/metrics" --become || echo "Node Exporter not accessible on some hosts"
+	@echo "Checking Promtail on client hosts..."
+	@ansible client_hosts -m uri -a "url=http://localhost:9080/targets" --become || echo "Promtail not accessible on some hosts"
 
 # Useful aliases
 status: monitoring-status
@@ -277,3 +298,9 @@ stop: monitoring-stop
 restart: monitoring-restart
 backup: monitoring-backup
 urls: monitoring-urls
+
+# Variables that can be overridden
+ANSIBLE_ARGS ?=
+EXTRA_VARS ?=
+SERVICE ?=
+ROLE ?=

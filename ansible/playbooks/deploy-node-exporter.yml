@@ -1,6 +1,6 @@
 ---
 - name: Deploy Node Exporter
-  hosts: monitoring_servers
+  hosts: client_hosts
   become: yes
   gather_facts: yes
 
@@ -203,7 +203,6 @@
       command: docker compose -p node-exporter -f {{ monitoring_base_dir }}/node-exporter/docker-compose.yml restart
       args:
         chdir: "{{ monitoring_base_dir }}/node-exporter"
-
 # Usage examples:
 # Deploy Node Exporter:
 # ansible-playbook -i inventory deploy-node-exporter.yml

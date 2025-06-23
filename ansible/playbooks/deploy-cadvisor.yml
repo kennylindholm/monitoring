@@ -11,7 +11,7 @@
 
     # cAdvisor specific configuration
     cadvisor_port: 8080
-    cadvisor_log_level: 0  # 0=INFO, 1=WARNING, 2=ERROR
+    cadvisor_log_level: 0 # 0=INFO, 1=WARNING, 2=ERROR
     cadvisor_housekeeping_interval: "10s"
     cadvisor_global_housekeeping_interval: "1m0s"
     cadvisor_max_housekeeping_interval: "15s"
@@ -36,13 +36,6 @@
         update_cache: yes
         cache_valid_time: 3600
       when: ansible_os_family == "Debian"
-
-    - name: Ensure system is updated (RedHat)
-      yum:
-        name: "*"
-        state: latest
-        update_cache: yes
-      when: ansible_os_family == "RedHat"
 
     - name: Check if Docker is installed
       command: docker --version
@@ -185,7 +178,7 @@
     - name: Configure container label whitelist
       lineinfile:
         path: "{{ monitoring_base_dir }}/cadvisor/docker-compose.yml"
-        line: "      - '-whitelisted_container_labels=com.docker.compose.service,com.docker.compose.project,io.kubernetes.pod.name,io.kubernetes.container.name'"
+        line: "      - '-whitelisted_container_labels=com.docker.compose.service,com.docker.compose.project'"
         insertafter: "    command:"
         state: present
       notify: restart cadvisor
@@ -220,18 +213,6 @@
   tags: [advanced, never]
 
   tasks:
-    - name: Configure cAdvisor for Kubernetes environments
-      lineinfile:
-        path: "{{ monitoring_base_dir }}/cadvisor/docker-compose.yml"
-        line: "{{ item }}"
-        insertafter: "    volumes:"
-        state: present
-      loop:
-        - "      - /var/lib/kubelet:/var/lib/kubelet:ro"
-        - "      - /var/log:/var/log:ro"
-      when: cadvisor_kubernetes_mode | default(false)
-      notify: restart cadvisor
-
     - name: Enable cAdvisor performance profiling
       lineinfile:
         path: "{{ monitoring_base_dir }}/cadvisor/docker-compose.yml"
@@ -262,19 +243,3 @@
       command: docker compose -p cadvisor -f {{ monitoring_base_dir }}/cadvisor/docker-compose.yml restart
       args:
         chdir: "{{ monitoring_base_dir }}/cadvisor"
-
-# Usage examples:
-# Deploy cAdvisor:
-# ansible-playbook -i inventory deploy-cadvisor.yml
-#
-# Deploy with custom configuration:
-# ansible-playbook -i inventory deploy-cadvisor.yml --tags configure
-#
-# Deploy with advanced configuration:
-# ansible-playbook -i inventory deploy-cadvisor.yml --tags advanced -e cadvisor_kubernetes_mode=true
-#
-# Deploy to specific hosts:
-# ansible-playbook -i inventory deploy-cadvisor.yml --limit monitoring_servers
-#
-# Check deployment status:
-# ansible-playbook -i inventory deploy-cadvisor.yml --tags never --check

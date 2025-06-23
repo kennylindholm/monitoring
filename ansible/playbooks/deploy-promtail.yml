@@ -1,9 +1,6 @@
 ---
-# Deploy Promtail to Application Servers
-# This playbook installs Promtail directly on the host (not in containers)
-
 - name: Deploy Promtail to Application Servers
-  hosts: app_servers
+  hosts: client_hosts
   become: yes
   gather_facts: yes
 
@@ -233,7 +230,7 @@
           ==========================================
 
           Deployed to hosts:
-          {% for host in groups['app_servers'] %}
+          {% for host in groups['client_hosts'] %}
           - {{ host }} ({{ hostvars[host]['ansible_default_ipv4']['address'] }})
             Status: {{ hostvars[host]['promtail_status']['status']['ActiveState'] | default('Unknown') }}
             Metrics: http://{{ hostvars[host]['ansible_default_ipv4']['address'] }}:9080/metrics

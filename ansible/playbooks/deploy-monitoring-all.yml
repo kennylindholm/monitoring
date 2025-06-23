@@ -11,7 +11,7 @@
 
     # Override specific component settings
     meta_prometheus_retention: "30d"
-    meta_grafana_admin_password: "{{ vault_grafana_admin_password | default('SecurePassword123!') }}"
+    meta_grafana_admin_password: "{{ vault_grafana_admin_password | default('admin123') }}"
     meta_loki_retention_period: "744h"
 
     # Control which components to deploy

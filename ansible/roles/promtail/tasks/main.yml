@@ -5,7 +5,7 @@
   apt:
     update_cache: yes
     cache_valid_time: 3600
-  become: yes
+  become: true
   when: ansible_os_family == "Debian"
 
 - name: Install required packages
@@ -16,13 +16,13 @@
       - ca-certificates
       - wget
     state: present
-  become: yes
+  become: true
 
 - name: Create promtail group
   group:
     name: "{{ promtail_group }}"
     system: yes
-  become: yes
+  become: true
 
 - name: Create promtail user
   user:
@@ -32,7 +32,7 @@
     shell: /bin/false
     home: "{{ promtail_data_dir }}"
     createhome: yes
-  become: yes
+  become: true
 
 - name: Create promtail directories
   file:
@@ -45,7 +45,7 @@
     - "{{ promtail_config_dir }}"
     - "{{ promtail_data_dir }}"
     - /var/log/promtail
-  become: yes
+  become: true
 
 - name: Check if promtail is already installed
   stat:
@@ -70,7 +70,7 @@
   when: >
     not promtail_binary.stat.exists or
     (installed_version.stdout is defined and promtail_version not in installed_version.stdout)
-  become: yes
+  become: true
 
 - name: Install promtail binary
   copy:
@@ -83,7 +83,7 @@
   when: >
     not promtail_binary.stat.exists or
     (installed_version.stdout is defined and promtail_version not in installed_version.stdout)
-  become: yes
+  become: true
   notify: restart promtail
 
 - name: Generate promtail configuration
@@ -94,7 +94,7 @@
     group: "{{ promtail_group }}"
     mode: "0644"
     validate: "{{ promtail_bin_path }} -config.file=%s -check-syntax"
-  become: yes
+  become: true
   notify: restart promtail
 
 - name: Create systemd service file
@@ -104,7 +104,7 @@
     owner: root
     group: root
     mode: "0644"
-  become: yes
+  become: true
   notify:
     - reload systemd
     - restart promtail
@@ -115,7 +115,7 @@
     capability: "{{ item }}=+ep"
     state: present
   loop: "{{ promtail_cap_add }}"
-  become: yes
+  become: true
   when: promtail_cap_add is defined
 
 - name: Check which log files exist
@@ -125,7 +125,7 @@
     - /var/log/syslog
     - /var/log/auth.log
   register: log_files_stat
-  become: yes
+  become: true
 
 - name: Ensure existing log files are readable by promtail
   file:
@@ -133,7 +133,7 @@
     mode: "0644"
   loop: "{{ log_files_stat.results }}"
   when: item.stat.exists
-  become: yes
+  become: true
   failed_when: false
 
 - name: Add promtail user to systemd-journal group
@@ -141,7 +141,7 @@
     name: "{{ promtail_user }}"
     groups: systemd-journal
     append: yes
-  become: yes
+  become: true
   notify: restart promtail
 
 - name: Start and enable promtail service
@@ -150,7 +150,7 @@
     state: "{{ promtail_service_state }}"
     enabled: "{{ promtail_service_enabled }}"
     daemon_reload: yes
-  become: yes
+  become: true
 
 - name: Wait for promtail to start
   wait_for:
@@ -163,7 +163,7 @@
   systemd:
     name: promtail
   register: promtail_status
-  become: yes
+  become: true
 
 - name: Verify promtail is running
   uri:

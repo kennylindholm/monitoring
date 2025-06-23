@@ -6,14 +6,14 @@
     name: promtail
     state: restarted
     daemon_reload: yes
-  become: yes
+  become: true
   when: promtail_service_state == "started"
 
 - name: reload promtail
   systemd:
     name: promtail
     state: reloaded
-  become: yes
+  become: true
   when: promtail_service_state == "started"
   failed_when: false
 
@@ -26,4 +26,4 @@
 - name: reload systemd
   systemd:
     daemon_reload: yes
-  become: yes
+  become: true

@@ -1,0 +1,382 @@
+---
+- name: Deploy Grafana
+  hosts: monitoring_servers
+  become: true
+  gather_facts: true
+
+  vars:
+    # Override default variables as needed
+    monitoring_base_dir: /opt/monitoring
+    monitoring_network_name: monitoring
+
+    # Grafana specific configuration
+    grafana_port: 3000
+    grafana_admin_user: "admin"
+    grafana_admin_password: "admin123"
+    grafana_log_level: "info"
+    grafana_data_path: "{{ monitoring_base_dir }}/grafana/data"
+    grafana_config_path: "{{ monitoring_base_dir }}/grafana/configs"
+    grafana_provisioning_path: "{{ monitoring_base_dir }}/grafana/provisioning"
+    grafana_plugins_path: "{{ monitoring_base_dir }}/grafana/plugins"
+
+    # Default datasources
+    grafana_datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: "http://prometheus:9090"
+        isDefault: true
+      - name: Loki
+        type: loki
+        access: proxy
+        url: "http://loki:3100"
+
+    # Default dashboards to install
+    grafana_dashboards:
+      - dashboard_id: 1860
+        revision: 27
+        datasource: Prometheus
+      - dashboard_id: 12486
+        revision: 2
+        datasource: Prometheus
+
+  pre_tasks:
+    - name: Display deployment information
+      debug:
+        msg: |
+          Starting Grafana deployment...
+          Target hosts: {{ ansible_play_hosts | join(', ') }}
+          Port: {{ grafana_port }}
+          Admin User: {{ grafana_admin_user }}
+          Data path: {{ grafana_data_path }}
+
+    - name: Verify connectivity to all hosts
+      ping:
+
+    - name: Ensure system is updated
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure system is updated (RedHat)
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Check if Docker is installed
+      command: docker --version
+      register: docker_check
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if Docker is not installed
+      fail:
+        msg: "Docker is not installed. Please run the docker installation playbook first."
+      when: docker_check.rc != 0
+
+    - name: Check if monitoring network exists
+      command: docker network inspect {{ monitoring_network_name }}
+      register: network_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create monitoring network if it doesn't exist
+      command: docker network create {{ monitoring_network_name }}
+      when: network_check.rc != 0
+
+  roles:
+    # Deploy common prerequisites first
+    - role: monitoring-common
+      tags: [common, always]
+
+    # Deploy Grafana
+    - role: grafana
+      tags: [grafana, visualization, dashboard]
+
+  post_tasks:
+    - name: Wait for Grafana to stabilize
+      pause:
+        seconds: 30
+
+    - name: Verify Grafana is accessible
+      uri:
+        url: "http://localhost:{{ grafana_port }}/api/health"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: grafana_health_check
+      retries: 5
+      delay: 10
+
+    - name: Check Grafana API
+      uri:
+        url: "http://localhost:{{ grafana_port }}/api/admin/stats"
+        method: GET
+        user: "{{ grafana_admin_user }}"
+        password: "{{ grafana_admin_password }}"
+        force_basic_auth: yes
+        status_code: 200
+        timeout: 30
+      register: grafana_api_check
+      retries: 3
+      delay: 10
+
+    - name: Verify Grafana datasources
+      uri:
+        url: "http://localhost:{{ grafana_port }}/api/datasources"
+        method: GET
+        user: "{{ grafana_admin_user }}"
+        password: "{{ grafana_admin_password }}"
+        force_basic_auth: yes
+        status_code: 200
+        timeout: 30
+      register: grafana_datasources_check
+      retries: 3
+      delay: 10
+
+    - name: Display Grafana stats
+      debug:
+        msg: |
+          Grafana instance statistics:
+          - Dashboards: {{ grafana_api_check.json.dashboards | default(0) }}
+          - Users: {{ grafana_api_check.json.users | default(1) }}
+          - Organizations: {{ grafana_api_check.json.orgs | default(1) }}
+          - Datasources: {{ grafana_datasources_check.json | length }}
+      when: grafana_api_check is succeeded and grafana_datasources_check is succeeded
+
+    - name: Create Grafana summary file
+      template:
+        src: grafana-summary.txt.j2
+        dest: "{{ monitoring_base_dir }}/GRAFANA_SUMMARY.txt"
+        mode: "0644"
+      vars:
+        deployment_date: "{{ ansible_date_time.iso8601 }}"
+
+    - name: Display access information
+      debug:
+        msg: |
+          ============================================
+          Grafana Deployment Complete!
+          ============================================
+
+          Access URLs:
+          - Grafana Web UI: http://{{ ansible_default_ipv4.address }}:{{ grafana_port }}
+          - Grafana API: http://{{ ansible_default_ipv4.address }}:{{ grafana_port }}/api/
+          - Grafana Health: http://{{ ansible_default_ipv4.address }}:{{ grafana_port }}/api/health
+
+          Login Credentials:
+          - Username: {{ grafana_admin_user }}
+          - Password: {{ grafana_admin_password }}
+
+          Configuration:
+          - Data Path: {{ grafana_data_path }}
+          - Config Path: {{ grafana_config_path }}
+          - Provisioning Path: {{ grafana_provisioning_path }}
+          - Plugins Path: {{ grafana_plugins_path }}
+
+          Key Features:
+          - Interactive dashboards and visualizations
+          - Multiple datasource support
+          - Alerting and notifications
+          - User management and permissions
+          - Plugin ecosystem
+          - API for automation
+
+          Configuration files: {{ monitoring_base_dir }}/grafana
+
+          To check service status:
+          docker ps --filter name=grafana
+
+          To view logs:
+          docker logs grafana
+
+          To install plugins:
+          docker exec grafana grafana-cli plugins install <plugin-name>
+
+          To backup/restore:
+          {{ monitoring_base_dir }}/scripts/backup-grafana.sh
+          {{ monitoring_base_dir }}/scripts/restore-grafana.sh
+
+          ============================================
+
+- name: Configure Grafana
+  hosts: monitoring_servers
+  become: true
+  gather_facts: false
+  tags: [configure, never]
+
+  tasks:
+    - name: Install additional Grafana plugins
+      uri:
+        url: "http://localhost:{{ grafana_port }}/api/plugins/{{ item }}/install"
+        method: POST
+        user: "{{ grafana_admin_user }}"
+        password: "{{ grafana_admin_password }}"
+        force_basic_auth: yes
+        status_code: [200, 409]
+      loop:
+        - grafana-clock-panel
+        - grafana-simple-json-datasource
+        - grafana-worldmap-panel
+        - grafana-piechart-panel
+      notify: restart grafana
+      tags: [grafana-plugins]
+
+    - name: Create custom organization
+      uri:
+        url: "http://localhost:{{ grafana_port }}/api/orgs"
+        method: POST
+        user: "{{ grafana_admin_user }}"
+        password: "{{ grafana_admin_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          name: "{{ grafana_custom_org_name | default('Monitoring Org') }}"
+        status_code: [200, 409]
+      when: grafana_custom_org_name is defined
+      tags: [grafana-org]
+
+    - name: Import custom dashboards
+      uri:
+        url: "http://localhost:{{ grafana_port }}/api/dashboards/db"
+        method: POST
+        user: "{{ grafana_admin_user }}"
+        password: "{{ grafana_admin_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          dashboard:
+            title: "{{ item.title }}"
+            tags: "{{ item.tags | default([]) }}"
+            panels: "{{ item.panels | default([]) }}"
+          overwrite: true
+        status_code: 200
+      loop: "{{ grafana_custom_dashboards | default([]) }}"
+      tags: [grafana-dashboards]
+
+    - name: Configure SMTP settings
+      lineinfile:
+        path: "{{ monitoring_base_dir }}/grafana/configs/grafana.ini"
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      loop:
+        - regexp: "^;?enabled = false"
+          line: "enabled = true"
+        - regexp: "^;?host = localhost:587"
+          line: "host = {{ grafana_smtp_host | default('localhost:587') }}"
+        - regexp: "^;?user ="
+          line: "user = {{ grafana_smtp_user | default('') }}"
+        - regexp: "^;?password ="
+          line: "password = {{ grafana_smtp_password | default('') }}"
+        - regexp: "^;?from_address = admin@grafana.localhost"
+          line: "from_address = {{ grafana_smtp_from | default('admin@grafana.localhost') }}"
+      when: grafana_smtp_enabled | default(false)
+      notify: restart grafana
+      tags: [grafana-smtp]
+
+    - name: Configure authentication settings
+      lineinfile:
+        path: "{{ monitoring_base_dir }}/grafana/configs/grafana.ini"
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      loop:
+        - regexp: "^;?allow_sign_up = true"
+          line: "allow_sign_up = {{ grafana_allow_signup | default(false) | lower }}"
+        - regexp: "^;?auto_assign_org = true"
+          line: "auto_assign_org = {{ grafana_auto_assign_org | default(true) | lower }}"
+        - regexp: "^;?auto_assign_org_role = Viewer"
+          line: "auto_assign_org_role = {{ grafana_auto_assign_role | default('Viewer') }}"
+      notify: restart grafana
+      tags: [grafana-auth]
+
+  handlers:
+    - name: restart grafana
+      command: docker restart grafana
+
+# Advanced configuration playbook for enterprise features
+- name: Advanced Grafana Configuration
+  hosts: monitoring_servers
+  become: true
+  gather_facts: false
+  tags: [advanced, never]
+
+  tasks:
+    - name: Configure LDAP authentication
+      template:
+        src: ldap.toml.j2
+        dest: "{{ monitoring_base_dir }}/grafana/configs/ldap.toml"
+        mode: "0644"
+      when: grafana_ldap_enabled | default(false)
+      notify: restart grafana
+
+    - name: Enable LDAP in Grafana config
+      lineinfile:
+        path: "{{ monitoring_base_dir }}/grafana/configs/grafana.ini"
+        regexp: "^;?enabled = false"
+        line: "enabled = true"
+        insertafter: "\\[auth.ldap\\]"
+      when: grafana_ldap_enabled | default(false)
+      notify: restart grafana
+
+    - name: Configure OAuth integration
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/grafana/configs/grafana.ini"
+        marker: "; {mark} OAUTH CONFIGURATION"
+        insertafter: "\\[auth.github\\]"
+        block: |
+          enabled = {{ grafana_oauth_enabled | default(false) | lower }}
+          allow_sign_up = {{ grafana_oauth_allow_signup | default(false) | lower }}
+          client_id = {{ grafana_oauth_client_id | default('') }}
+          client_secret = {{ grafana_oauth_client_secret | default('') }}
+          scopes = user:email,read:org
+          auth_url = {{ grafana_oauth_auth_url | default('https://github.com/login/oauth/authorize') }}
+          token_url = {{ grafana_oauth_token_url | default('https://github.com/login/oauth/access_token') }}
+          api_url = {{ grafana_oauth_api_url | default('https://api.github.com/user') }}
+          allowed_organizations = {{ grafana_oauth_allowed_orgs | default('') }}
+      when: grafana_oauth_enabled | default(false)
+      notify: restart grafana
+
+    - name: Configure external image storage
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/grafana/configs/grafana.ini"
+        marker: "; {mark} EXTERNAL IMAGE STORAGE"
+        insertafter: "\\[external_image_storage\\]"
+        block: |
+          provider = {{ grafana_image_storage_provider | default('local') }}
+          {% if grafana_image_storage_provider == 's3' %}
+          bucket = {{ grafana_s3_bucket }}
+          region = {{ grafana_s3_region }}
+          path = {{ grafana_s3_path | default('') }}
+          access_key = {{ grafana_s3_access_key }}
+          secret_key = {{ grafana_s3_secret_key }}
+          {% endif %}
+      when: grafana_image_storage_provider is defined
+      notify: restart grafana
+
+  handlers:
+    - name: restart grafana
+      command: docker restart grafana
+
+# Usage examples:
+# Deploy Grafana:
+# ansible-playbook -i inventory deploy-grafana.yml
+#
+# Deploy with custom configuration:
+# ansible-playbook -i inventory deploy-grafana.yml --tags configure
+#
+# Deploy with advanced features:
+# ansible-playbook -i inventory deploy-grafana.yml --tags advanced -e grafana_ldap_enabled=true
+#
+# Deploy to specific hosts:
+# ansible-playbook -i inventory deploy-grafana.yml --limit monitoring_servers
+#
+# Deploy with custom admin password:
+# ansible-playbook -i inventory deploy-grafana.yml -e grafana_admin_password=secure_password
+#
+# Deploy with SMTP enabled:
+# ansible-playbook -i inventory deploy-grafana.yml --tags configure -e grafana_smtp_enabled=true

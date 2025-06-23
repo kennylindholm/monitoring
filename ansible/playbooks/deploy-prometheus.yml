@@ -1,0 +1,371 @@
+---
+- name: Deploy Prometheus
+  hosts: monitoring_servers
+  become: true
+  gather_facts: true
+
+  vars:
+    # Override default variables as needed
+    monitoring_base_dir: /opt/monitoring
+    monitoring_network_name: monitoring
+
+    # Prometheus specific configuration
+    prometheus_port: 9090
+    prometheus_retention: "30d"
+    prometheus_log_level: "info"
+    prometheus_storage_path: "{{ monitoring_base_dir }}/prometheus/data"
+    prometheus_config_path: "{{ monitoring_base_dir }}/prometheus/configs"
+    prometheus_web_enable_lifecycle: true
+    prometheus_web_enable_admin_api: false
+
+    # Default scrape configurations
+    prometheus_scrape_configs:
+      - job_name: "prometheus"
+        static_configs:
+          - targets: ["localhost:9090"]
+      - job_name: "node-exporter"
+        static_configs:
+          - targets: ["localhost:9100"]
+
+  pre_tasks:
+    - name: Display deployment information
+      debug:
+        msg: |
+          Starting Prometheus deployment...
+          Target hosts: {{ ansible_play_hosts | join(', ') }}
+          Port: {{ prometheus_port }}
+          Retention: {{ prometheus_retention }}
+          Storage path: {{ prometheus_storage_path }}
+
+    - name: Verify connectivity to all hosts
+      ping:
+
+    - name: Ensure system is updated
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure system is updated (RedHat)
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Check if Docker is installed
+      command: docker --version
+      register: docker_check
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if Docker is not installed
+      fail:
+        msg: "Docker is not installed. Please run the docker installation playbook first."
+      when: docker_check.rc != 0
+
+    - name: Check if monitoring network exists
+      command: docker network inspect {{ monitoring_network_name }}
+      register: network_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create monitoring network if it doesn't exist
+      command: docker network create {{ monitoring_network_name }}
+      when: network_check.rc != 0
+
+  roles:
+    # Deploy common prerequisites first
+    - role: monitoring-common
+      tags: [common, always]
+
+    # Deploy Prometheus
+    - role: prometheus
+      tags: [prometheus, metrics, core]
+
+  post_tasks:
+    - name: Wait for Prometheus to stabilize
+      pause:
+        seconds: 30
+
+    - name: Verify Prometheus is accessible
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/api/v1/status/config"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: prometheus_config_check
+      retries: 5
+      delay: 10
+
+    - name: Check Prometheus targets endpoint
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/api/v1/targets"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: prometheus_targets_check
+      retries: 3
+      delay: 10
+
+    - name: Verify Prometheus metrics endpoint
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/metrics"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: prometheus_metrics_check
+      retries: 3
+      delay: 10
+
+    - name: Check Prometheus query API
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/api/v1/query?query=up"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: prometheus_query_check
+      retries: 3
+      delay: 10
+
+    - name: Display Prometheus targets status
+      debug:
+        msg: |
+          Active targets: {{ prometheus_targets_check.json.data.activeTargets | length }}
+          Dropped targets: {{ prometheus_targets_check.json.data.droppedTargets | length }}
+      when: prometheus_targets_check is succeeded
+
+    - name: Create Prometheus summary file
+      template:
+        src: prometheus-summary.txt.j2
+        dest: "{{ monitoring_base_dir }}/PROMETHEUS_SUMMARY.txt"
+        mode: "0644"
+      vars:
+        deployment_date: "{{ ansible_date_time.iso8601 }}"
+
+    - name: Display access information
+      debug:
+        msg: |
+          ============================================
+          Prometheus Deployment Complete!
+          ============================================
+
+          Access URLs:
+          - Prometheus Web UI: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port }}
+          - Prometheus API: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port }}/api/v1/
+          - Prometheus Metrics: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port }}/metrics
+          - Prometheus Config: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port }}/config
+          - Prometheus Targets: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port }}/targets
+
+          Configuration:
+          - Retention Period: {{ prometheus_retention }}
+          - Storage Path: {{ prometheus_storage_path }}
+          - Configuration Path: {{ prometheus_config_path }}
+
+          Key Features:
+          - Time-series database for metrics
+          - PromQL query language
+          - Built-in alerting (requires Alertmanager)
+          - Service discovery support
+          - HTTP API for integrations
+
+          Configuration files: {{ monitoring_base_dir }}/prometheus
+
+          To check service status:
+          docker ps --filter name=prometheus
+
+          To view logs:
+          docker logs prometheus
+
+          To reload configuration:
+          curl -X POST http://localhost:{{ prometheus_port }}/-/reload
+
+          To add scrape targets, edit:
+          {{ prometheus_config_path }}/prometheus.yml
+
+          ============================================
+
+- name: Configure Prometheus
+  hosts: monitoring_servers
+  become: true
+  gather_facts: false
+  tags: [configure, never]
+
+  tasks:
+    - name: Add custom scrape targets
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/prometheus/configs/prometheus.yml"
+        marker: "  # {mark} CUSTOM SCRAPE TARGETS"
+        insertafter: "scrape_configs:"
+        block: |
+          - job_name: 'custom-app'
+            static_configs:
+              - targets: ['app-server-1:8080', 'app-server-2:8080']
+            scrape_interval: 15s
+            metrics_path: /metrics
+      notify: reload prometheus
+      tags: [prometheus-config]
+
+    - name: Configure Prometheus recording rules
+      copy:
+        content: |
+          groups:
+            - name: custom_rules
+              rules:
+                - record: instance:node_cpu_utilisation:rate5m
+                  expr: 1 - avg without (cpu, mode) (rate(node_cpu_seconds_total{mode="idle"}[5m]))
+                - record: instance:node_memory_utilisation:ratio
+                  expr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+        dest: "{{ monitoring_base_dir }}/prometheus/configs/recording_rules.yml"
+      notify: reload prometheus
+      tags: [prometheus-rules]
+
+    - name: Configure Prometheus alerting rules
+      copy:
+        content: |
+          groups:
+            - name: custom_alerts
+              rules:
+                - alert: HighCPUUsage
+                  expr: instance:node_cpu_utilisation:rate5m > 0.8
+                  for: 5m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "High CPU usage detected"
+                    description: "CPU usage is above 80% for more than 5 minutes"
+                - alert: HighMemoryUsage
+                  expr: instance:node_memory_utilisation:ratio > 0.9
+                  for: 5m
+                  labels:
+                    severity: critical
+                  annotations:
+                    summary: "High memory usage detected"
+                    description: "Memory usage is above 90% for more than 5 minutes"
+        dest: "{{ monitoring_base_dir }}/prometheus/configs/alerting_rules.yml"
+      notify: reload prometheus
+      tags: [prometheus-alerts]
+
+    - name: Update Prometheus configuration with rules
+      lineinfile:
+        path: "{{ monitoring_base_dir }}/prometheus/configs/prometheus.yml"
+        line: "{{ item }}"
+        insertafter: "global:"
+        state: present
+      loop:
+        - "rule_files:"
+        - "  - 'recording_rules.yml'"
+        - "  - 'alerting_rules.yml'"
+      notify: reload prometheus
+      tags: [prometheus-config]
+
+    - name: Configure Alertmanager integration
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/prometheus/configs/prometheus.yml"
+        marker: "# {mark} ALERTMANAGER CONFIGURATION"
+        insertafter: "rule_files:"
+        block: |
+          alerting:
+            alertmanagers:
+              - static_configs:
+                  - targets:
+                    - alertmanager:9093
+      notify: reload prometheus
+      tags: [prometheus-alertmanager]
+
+  handlers:
+    - name: reload prometheus
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/-/reload"
+        method: POST
+        status_code: 200
+      register: reload_result
+      failed_when: reload_result.status != 200
+
+# Advanced configuration playbook for federation and high availability
+- name: Advanced Prometheus Configuration
+  hosts: monitoring_servers
+  become: true
+  gather_facts: false
+  tags: [advanced, never]
+
+  tasks:
+    - name: Configure Prometheus federation
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/prometheus/configs/prometheus.yml"
+        marker: "  # {mark} FEDERATION CONFIGURATION"
+        insertafter: "scrape_configs:"
+        block: |
+          - job_name: 'federate'
+            scrape_interval: 15s
+            honor_labels: true
+            metrics_path: '/federate'
+            params:
+              'match[]':
+                - '{job=~"prometheus|node-exporter"}'
+                - '{__name__=~"job:.*"}'
+            static_configs:
+              - targets:
+                - 'prometheus-master:9090'
+      when: prometheus_federation_enabled | default(false)
+      notify: reload prometheus
+
+    - name: Enable Prometheus remote write
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/prometheus/configs/prometheus.yml"
+        marker: "# {mark} REMOTE WRITE CONFIGURATION"
+        insertafter: "global:"
+        block: |
+          remote_write:
+            - url: "{{ prometheus_remote_write_url }}"
+              basic_auth:
+                username: "{{ prometheus_remote_write_username }}"
+                password: "{{ prometheus_remote_write_password }}"
+      when:
+        - prometheus_remote_write_url is defined
+        - prometheus_remote_write_username is defined
+        - prometheus_remote_write_password is defined
+      notify: reload prometheus
+
+    - name: Configure service discovery
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/prometheus/configs/prometheus.yml"
+        marker: "  # {mark} SERVICE DISCOVERY"
+        insertafter: "scrape_configs:"
+        block: |
+          - job_name: 'consul-services'
+            consul_sd_configs:
+              - server: 'consul:8500'
+                services: []
+            relabel_configs:
+              - source_labels: [__meta_consul_tags]
+                regex: .*,prometheus,.*
+                action: keep
+      when: prometheus_consul_enabled | default(false)
+      notify: reload prometheus
+
+  handlers:
+    - name: reload prometheus
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/-/reload"
+        method: POST
+        status_code: 200
+
+# Usage examples:
+# Deploy Prometheus:
+# ansible-playbook -i inventory deploy-prometheus.yml
+#
+# Deploy with custom configuration:
+# ansible-playbook -i inventory deploy-prometheus.yml --tags configure
+#
+# Deploy with advanced features:
+# ansible-playbook -i inventory deploy-prometheus.yml --tags advanced -e prometheus_federation_enabled=true
+#
+# Deploy to specific hosts:
+# ansible-playbook -i inventory deploy-prometheus.yml --limit monitoring_servers
+#
+# Check deployment status:
+# ansible-playbook -i inventory deploy-prometheus.yml --check
+#
+# Deploy with custom retention:
+# ansible-playbook -i inventory deploy-prometheus.yml -e prometheus_retention=60d

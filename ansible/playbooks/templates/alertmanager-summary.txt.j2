@@ -1,0 +1,162 @@
+============================================
+ALERTMANAGER DEPLOYMENT SUMMARY
+============================================
+
+Deployment Information:
+- Deployment Date: {{ deployment_date }}
+- Ansible User: {{ ansible_user_id }}
+- Target Host: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})
+- Alertmanager Version: {{ alertmanager_version | default('Latest') }}
+
+Configuration Details:
+- Base Directory: {{ monitoring_base_dir }}/alertmanager
+- Data Path: {{ alertmanager_data_path | default(monitoring_base_dir + '/alertmanager/data') }}
+- Configuration Path: {{ alertmanager_config_path | default(monitoring_base_dir + '/alertmanager/configs') }}
+- Web Port: {{ alertmanager_port | default('9093') }}
+- Cluster Port: {{ alertmanager_cluster_port | default('9094') }}
+- Log Level: {{ alertmanager_log_level | default('info') }}
+- Retention: {{ alertmanager_retention | default('120h') }}
+
+Access Information:
+- Web UI: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port | default('9093') }}
+- API Endpoint: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port | default('9093') }}/api/v1/
+- Health Check: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port | default('9093') }}/-/healthy
+- Ready Check: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port | default('9093') }}/-/ready
+
+Container Information:
+- Container Name: alertmanager
+- Network: {{ monitoring_network_name | default('monitoring') }}
+- Restart Policy: unless-stopped
+
+Key Features Enabled:
+- Alert Management: ✓
+- Notification Routing: ✓
+- Alert Grouping: ✓
+- Alert Silencing: ✓
+- Alert Inhibition: ✓
+- Web Interface: ✓
+- REST API: ✓
+- High Availability: {{ 'Yes' if alertmanager_clustering_enabled | default(false) else 'No' }}
+
+Default Route Configuration:
+- Group By: {{ alertmanager_route.group_by | default(['alertname']) | join(', ') }}
+- Group Wait: {{ alertmanager_route.group_wait | default('10s') }}
+- Group Interval: {{ alertmanager_route.group_interval | default('10s') }}
+- Repeat Interval: {{ alertmanager_route.repeat_interval | default('1h') }}
+- Default Receiver: {{ alertmanager_route.receiver | default('default') }}
+
+Notification Channels:
+{% if alertmanager_receivers is defined %}
+{% for receiver in alertmanager_receivers %}
+- Name: {{ receiver.name }}
+  Email: {{ 'Yes' if receiver.email_configs | default([]) | length > 0 else 'No' }}
+  Slack: {{ 'Yes' if receiver.slack_configs | default([]) | length > 0 else 'No' }}
+  Webhook: {{ 'Yes' if receiver.webhook_configs | default([]) | length > 0 else 'No' }}
+{% endfor %}
+{% endif %}
+
+Optional Integrations:
+- Email Notifications: {{ 'Enabled' if alertmanager_email_enabled | default(false) else 'Disabled' }}
+- Slack Integration: {{ 'Enabled' if alertmanager_slack_enabled | default(false) else 'Disabled' }}
+- Webhook Notifications: {{ 'Enabled' if alertmanager_webhook_enabled | default(false) else 'Disabled' }}
+- Custom Templates: {{ 'Enabled' if alertmanager_templates_enabled | default(false) else 'Disabled' }}
+
+Management Commands:
+- Check Status: docker ps --filter name=alertmanager
+- View Logs: docker logs alertmanager
+- Restart Service: docker restart alertmanager
+- Reload Config: curl -X POST http://localhost:{{ alertmanager_port | default('9093') }}/-/reload
+- Test Config: amtool config check --alertmanager.url=http://localhost:{{ alertmanager_port | default('9093') }}
+
+Configuration Files:
+- Main Config: {{ monitoring_base_dir }}/alertmanager/configs/alertmanager.yml
+- Templates: {{ monitoring_base_dir }}/alertmanager/configs/templates/
+- Docker Compose: {{ monitoring_base_dir }}/alertmanager/docker-compose.yml
+
+Important Directories:
+- Data Directory: {{ alertmanager_data_path | default(monitoring_base_dir + '/alertmanager/data') }}
+- Config Directory: {{ alertmanager_config_path | default(monitoring_base_dir + '/alertmanager/configs') }}
+- Templates Directory: {{ monitoring_base_dir }}/alertmanager/configs/templates/
+
+API Endpoints:
+- Status: /api/v1/status
+- Alerts: /api/v1/alerts
+- Silences: /api/v1/silences
+- Receivers: /api/v1/receivers
+- Config: /api/v1/status/config
+
+CLI Tool Usage (amtool):
+- List alerts: amtool alert query --alertmanager.url=http://localhost:{{ alertmanager_port | default('9093') }}
+- Create silence: amtool silence add --alertmanager.url=http://localhost:{{ alertmanager_port | default('9093') }} alertname=TestAlert
+- List silences: amtool silence query --alertmanager.url=http://localhost:{{ alertmanager_port | default('9093') }}
+- Test config: amtool config check --alertmanager.url=http://localhost:{{ alertmanager_port | default('9093') }}
+
+Clustering Information:
+{% if alertmanager_clustering_enabled | default(false) %}
+- Clustering: Enabled
+- Listen Address: 0.0.0.0:{{ alertmanager_cluster_port | default('9094') }}
+- Advertise Address: {{ ansible_default_ipv4.address }}:{{ alertmanager_cluster_port | default('9094') }}
+- Cluster Peers:
+{% for host in groups['monitoring_servers'] | default([]) %}
+{% if host != inventory_hostname %}
+  - {{ hostvars[host]['ansible_default_ipv4']['address'] }}:{{ alertmanager_cluster_port | default('9094') }}
+{% endif %}
+{% endfor %}
+{% else %}
+- Clustering: Disabled (Single Instance)
+{% endif %}
+
+Alert Routing Examples:
+- Critical alerts → Email notifications (immediate)
+- Warning alerts → Slack notifications (10s delay)
+- Service alerts → Webhook notifications (custom handling)
+- Infrastructure alerts → Multiple channels
+
+Security Considerations:
+- Web UI Access: No authentication by default
+- API Access: No authentication by default
+- Network Security: Restrict access to {{ alertmanager_port | default('9093') }} port
+- Config Security: Protect webhook URLs and credentials
+
+Next Steps:
+1. Configure notification channels (email, slack, webhooks)
+2. Set up alert routing rules based on severity
+3. Configure alert inhibition rules to reduce noise
+4. Set up alert templates for better notifications
+5. Configure Prometheus to send alerts to Alertmanager
+6. Test alert notification flow end-to-end
+7. Set up monitoring for Alertmanager itself
+8. Configure backup procedures for alert data
+
+Integration with Prometheus:
+Add this to your Prometheus configuration:
+```yaml
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+```
+
+Sample Alert Rules for Prometheus:
+```yaml
+groups:
+  - name: example
+    rules:
+      - alert: HighErrorRate
+        expr: job:request_latency_seconds:mean5m{job="myjob"} > 0.5
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: High request latency
+```
+
+For more information:
+- Alertmanager Documentation: https://prometheus.io/docs/alerting/alertmanager/
+- Configuration Reference: https://prometheus.io/docs/alerting/configuration/
+- Notification Templates: https://prometheus.io/docs/alerting/notifications/
+
+============================================
+Alertmanager is ready for alert management!
+============================================

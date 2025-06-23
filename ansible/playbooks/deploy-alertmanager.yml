@@ -1,0 +1,445 @@
+---
+- name: Deploy Alertmanager
+  hosts: monitoring_servers
+  become: true
+  gather_facts: true
+
+  vars:
+    # Override default variables as needed
+    monitoring_base_dir: /opt/monitoring
+    monitoring_network_name: monitoring
+
+    # Alertmanager specific configuration
+    alertmanager_port: 9093
+    alertmanager_cluster_port: 9094
+    alertmanager_log_level: "info"
+    alertmanager_data_path: "{{ monitoring_base_dir }}/alertmanager/data"
+    alertmanager_config_path: "{{ monitoring_base_dir }}/alertmanager/configs"
+    alertmanager_retention: "120h"
+    alertmanager_web_external_url: ""
+    alertmanager_web_route_prefix: "/"
+
+    # Default receiver configuration
+    alertmanager_receivers:
+      - name: "default"
+        email_configs: []
+        slack_configs: []
+        webhook_configs: []
+
+    # Default route configuration
+    alertmanager_route:
+      group_by: ['alertname']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'default'
+
+    # Inhibit rules (optional)
+    alertmanager_inhibit_rules: []
+
+  pre_tasks:
+    - name: Display deployment information
+      debug:
+        msg: |
+          Starting Alertmanager deployment...
+          Target hosts: {{ ansible_play_hosts | join(', ') }}
+          Port: {{ alertmanager_port }}
+          Cluster Port: {{ alertmanager_cluster_port }}
+          Retention: {{ alertmanager_retention }}
+          Data path: {{ alertmanager_data_path }}
+
+    - name: Verify connectivity to all hosts
+      ping:
+
+    - name: Ensure system is updated
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure system is updated (RedHat)
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Check if Docker is installed
+      command: docker --version
+      register: docker_check
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if Docker is not installed
+      fail:
+        msg: "Docker is not installed. Please run the docker installation playbook first."
+      when: docker_check.rc != 0
+
+    - name: Check if monitoring network exists
+      command: docker network inspect {{ monitoring_network_name }}
+      register: network_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create monitoring network if it doesn't exist
+      command: docker network create {{ monitoring_network_name }}
+      when: network_check.rc != 0
+
+  roles:
+    # Deploy common prerequisites first
+    - role: monitoring-common
+      tags: [common, always]
+
+    # Deploy Alertmanager
+    - role: alertmanager
+      tags: [alertmanager, alerts, notifications]
+
+  post_tasks:
+    - name: Wait for Alertmanager to stabilize
+      pause:
+        seconds: 30
+
+    - name: Verify Alertmanager is accessible
+      uri:
+        url: "http://localhost:{{ alertmanager_port }}/-/healthy"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: alertmanager_health_check
+      retries: 5
+      delay: 10
+
+    - name: Check Alertmanager API
+      uri:
+        url: "http://localhost:{{ alertmanager_port }}/api/v1/status"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: alertmanager_api_check
+      retries: 3
+      delay: 10
+
+    - name: Verify Alertmanager config endpoint
+      uri:
+        url: "http://localhost:{{ alertmanager_port }}/api/v1/status/config"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: alertmanager_config_check
+      retries: 3
+      delay: 10
+
+    - name: Check Alertmanager receivers
+      uri:
+        url: "http://localhost:{{ alertmanager_port }}/api/v1/receivers"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: alertmanager_receivers_check
+      retries: 3
+      delay: 10
+
+    - name: Display Alertmanager status
+      debug:
+        msg: |
+          Alertmanager status:
+          - Cluster Status: {{ alertmanager_api_check.json.cluster.status | default('N/A') }}
+          - Version: {{ alertmanager_api_check.json.versionInfo.version | default('N/A') }}
+          - Config Hash: {{ alertmanager_config_check.json.original[:8] | default('N/A') }}...
+          - Receivers: {{ alertmanager_receivers_check.json | length }}
+      when: alertmanager_api_check is succeeded
+
+    - name: Create Alertmanager summary file
+      template:
+        src: alertmanager-summary.txt.j2
+        dest: "{{ monitoring_base_dir }}/ALERTMANAGER_SUMMARY.txt"
+        mode: "0644"
+      vars:
+        deployment_date: "{{ ansible_date_time.iso8601 }}"
+
+    - name: Display access information
+      debug:
+        msg: |
+          ============================================
+          Alertmanager Deployment Complete!
+          ============================================
+
+          Access URLs:
+          - Alertmanager Web UI: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}
+          - Alertmanager API: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}/api/v1/
+          - Health Check: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}/-/healthy
+          - Ready Check: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}/-/ready
+
+          Configuration:
+          - Port: {{ alertmanager_port }}
+          - Cluster Port: {{ alertmanager_cluster_port }}
+          - Retention: {{ alertmanager_retention }}
+          - Data Path: {{ alertmanager_data_path }}
+          - Log Level: {{ alertmanager_log_level }}
+
+          Key Features:
+          - Alert deduplication and grouping
+          - Routing and notification delivery
+          - Silencing and inhibition rules
+          - High availability clustering
+          - Web UI for alert management
+          - REST API for automation
+
+          Configuration files: {{ monitoring_base_dir }}/alertmanager
+
+          To check service status:
+          docker ps --filter name=alertmanager
+
+          To view logs:
+          docker logs alertmanager
+
+          To reload configuration:
+          curl -X POST http://localhost:{{ alertmanager_port }}/-/reload
+
+          To silence alerts:
+          amtool silence add --alertmanager.url=http://localhost:{{ alertmanager_port }}
+
+          ============================================
+
+- name: Configure Alertmanager
+  hosts: monitoring_servers
+  become: true
+  gather_facts: false
+  tags: [configure, never]
+
+  tasks:
+    - name: Configure email notifications
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/alertmanager/configs/alertmanager.yml"
+        marker: "  # {mark} EMAIL RECEIVER CONFIGURATION"
+        insertafter: "receivers:"
+        block: |
+          - name: 'email-alerts'
+            email_configs:
+              - to: '{{ alertmanager_email_to | default("admin@example.com") }}'
+                from: '{{ alertmanager_email_from | default("alertmanager@example.com") }}'
+                smarthost: '{{ alertmanager_email_smarthost | default("localhost:587") }}'
+                auth_username: '{{ alertmanager_email_username | default("") }}'
+                auth_password: '{{ alertmanager_email_password | default("") }}'
+                subject: 'Alert: {{ "{{ .GroupLabels.alertname }}" }}'
+                body: |
+                  {{ "{{ range .Alerts }}" }}
+                  Alert: {{ "{{ .Annotations.summary }}" }}
+                  Description: {{ "{{ .Annotations.description }}" }}
+                  Labels: {{ "{{ range .Labels.SortedPairs }}" }}{{ "{{ .Name }}" }}={{ "{{ .Value }}" }} {{ "{{ end }}" }}
+                  {{ "{{ end }}" }}
+      when: alertmanager_email_enabled | default(false)
+      notify: reload alertmanager
+      tags: [alertmanager-email]
+
+    - name: Configure Slack notifications
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/alertmanager/configs/alertmanager.yml"
+        marker: "  # {mark} SLACK RECEIVER CONFIGURATION"
+        insertafter: "receivers:"
+        block: |
+          - name: 'slack-alerts'
+            slack_configs:
+              - api_url: '{{ alertmanager_slack_webhook_url }}'
+                channel: '{{ alertmanager_slack_channel | default("#alerts") }}'
+                username: '{{ alertmanager_slack_username | default("alertmanager") }}'
+                title: 'Alert: {{ "{{ .GroupLabels.alertname }}" }}'
+                text: |
+                  {{ "{{ range .Alerts }}" }}
+                  *Alert:* {{ "{{ .Annotations.summary }}" }}
+                  *Description:* {{ "{{ .Annotations.description }}" }}
+                  *Labels:* {{ "{{ range .Labels.SortedPairs }}" }}{{ "{{ .Name }}" }}={{ "{{ .Value }}" }} {{ "{{ end }}" }}
+                  {{ "{{ end }}" }}
+                send_resolved: true
+      when:
+        - alertmanager_slack_enabled | default(false)
+        - alertmanager_slack_webhook_url is defined
+      notify: reload alertmanager
+      tags: [alertmanager-slack]
+
+    - name: Configure webhook notifications
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/alertmanager/configs/alertmanager.yml"
+        marker: "  # {mark} WEBHOOK RECEIVER CONFIGURATION"
+        insertafter: "receivers:"
+        block: |
+          - name: 'webhook-alerts'
+            webhook_configs:
+              - url: '{{ alertmanager_webhook_url }}'
+                send_resolved: true
+                http_config:
+                  basic_auth:
+                    username: '{{ alertmanager_webhook_username | default("") }}'
+                    password: '{{ alertmanager_webhook_password | default("") }}'
+      when:
+        - alertmanager_webhook_enabled | default(false)
+        - alertmanager_webhook_url is defined
+      notify: reload alertmanager
+      tags: [alertmanager-webhook]
+
+    - name: Configure custom routing rules
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/alertmanager/configs/alertmanager.yml"
+        marker: "# {mark} CUSTOM ROUTING RULES"
+        insertafter: "route:"
+        block: |
+          routes:
+            - match:
+                severity: critical
+              receiver: 'email-alerts'
+              group_wait: 5s
+              group_interval: 5s
+              repeat_interval: 30m
+            - match:
+                severity: warning
+              receiver: 'slack-alerts'
+              group_wait: 10s
+              group_interval: 10s
+              repeat_interval: 1h
+            - match_re:
+                service: ^(database|cache)$
+              receiver: 'webhook-alerts'
+              group_by: ['service', 'instance']
+      notify: reload alertmanager
+      tags: [alertmanager-routing]
+
+    - name: Configure inhibition rules
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/alertmanager/configs/alertmanager.yml"
+        marker: "# {mark} INHIBITION RULES"
+        insertafter: "inhibit_rules:"
+        block: |
+          - source_match:
+              severity: 'critical'
+            target_match:
+              severity: 'warning'
+            equal: ['alertname', 'instance']
+          - source_match:
+              alertname: 'NodeDown'
+            target_match_re:
+              service: '.*'
+            equal: ['instance']
+      notify: reload alertmanager
+      tags: [alertmanager-inhibit]
+
+  handlers:
+    - name: reload alertmanager
+      uri:
+        url: "http://localhost:{{ alertmanager_port }}/-/reload"
+        method: POST
+        status_code: 200
+
+# Advanced configuration playbook for clustering and high availability
+- name: Advanced Alertmanager Configuration
+  hosts: monitoring_servers
+  become: true
+  gather_facts: false
+  tags: [advanced, never]
+
+  tasks:
+    - name: Configure Alertmanager clustering
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/alertmanager/docker-compose.yml"
+        marker: "      # {mark} CLUSTERING CONFIGURATION"
+        insertafter: "    command:"
+        block: |
+          - '--cluster.listen-address=0.0.0.0:{{ alertmanager_cluster_port }}'
+          - '--cluster.advertise-address={{ ansible_default_ipv4.address }}:{{ alertmanager_cluster_port }}'
+          {% for host in groups['monitoring_servers'] %}
+          {% if host != inventory_hostname %}
+          - '--cluster.peer={{ hostvars[host]['ansible_default_ipv4']['address'] }}:{{ alertmanager_cluster_port }}'
+          {% endif %}
+          {% endfor %}
+      when:
+        - alertmanager_clustering_enabled | default(false)
+        - groups['monitoring_servers'] | length > 1
+      notify: restart alertmanager
+
+    - name: Configure external URL for clustering
+      lineinfile:
+        path: "{{ monitoring_base_dir }}/alertmanager/docker-compose.yml"
+        line: "      - '--web.external-url={{ alertmanager_web_external_url }}'"
+        insertafter: "    command:"
+        state: present
+      when: alertmanager_web_external_url | length > 0
+      notify: restart alertmanager
+
+    - name: Setup Alertmanager data persistence
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/alertmanager/docker-compose.yml"
+        marker: "    # {mark} DATA PERSISTENCE"
+        insertafter: "    volumes:"
+        block: |
+          - "{{ alertmanager_data_path }}:/alertmanager/data:rw"
+          - "{{ alertmanager_config_path }}:/etc/alertmanager:ro"
+      notify: restart alertmanager
+
+    - name: Configure Alertmanager with external storage
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/alertmanager/configs/alertmanager.yml"
+        marker: "# {mark} EXTERNAL STORAGE CONFIGURATION"
+        insertafter: "global:"
+        block: |
+          external_url: '{{ alertmanager_web_external_url }}'
+          cluster:
+            listen_address: '0.0.0.0:{{ alertmanager_cluster_port }}'
+            peers:
+              {% for host in groups['monitoring_servers'] %}
+              {% if host != inventory_hostname %}
+              - '{{ hostvars[host]['ansible_default_ipv4']['address'] }}:{{ alertmanager_cluster_port }}'
+              {% endif %}
+              {% endfor %}
+      when:
+        - alertmanager_clustering_enabled | default(false)
+        - groups['monitoring_servers'] | length > 1
+      notify: reload alertmanager
+
+    - name: Configure Alertmanager templates
+      copy:
+        content: |
+          {{ "{{ define \"slack.default.title\" }}" }}
+          [{{ "{{ .Status | toUpper }}" }}{{ "{{ if eq .Status \"firing\" }}" }}:{{ "{{ .Alerts.Firing | len }}" }}{{ "{{ end }}" }}] {{ "{{ .GroupLabels.SortedPairs.Values | join \" \" }}" }} {{ "{{ if gt (len .GroupLabels) 0 }}" }}({{ "{{ range .GroupLabels.SortedPairs }}" }}{{ "{{ .Name }}" }}={{ "{{ .Value }}" }} {{ "{{ end }}" }}){{ "{{ end }}" }}
+          {{ "{{ end }}" }}
+
+          {{ "{{ define \"slack.default.text\" }}" }}
+          {{ "{{ range .Alerts }}" }}
+          *Alert:* {{ "{{ .Annotations.title }}" }}{{ "{{ if .Annotations.summary }}" }} - {{ "{{ .Annotations.summary }}" }}{{ "{{ end }}" }}
+          *Description:* {{ "{{ .Annotations.description }}" }}
+          *Graph:* <{{ "{{ .GeneratorURL }}" }}|:chart_with_upwards_trend:>
+          *Details:*
+          {{ "{{ range .Labels.SortedPairs }}" }} • *{{ "{{ .Name }}" }}:* `{{ "{{ .Value }}" }}`
+          {{ "{{ end }}" }}
+          {{ "{{ end }}" }}
+          {{ "{{ end }}" }}
+        dest: "{{ alertmanager_config_path }}/templates/slack.tmpl"
+        mode: "0644"
+      notify: reload alertmanager
+
+  handlers:
+    - name: restart alertmanager
+      command: docker restart alertmanager
+
+    - name: reload alertmanager
+      uri:
+        url: "http://localhost:{{ alertmanager_port }}/-/reload"
+        method: POST
+        status_code: 200
+
+# Usage examples:
+# Deploy Alertmanager:
+# ansible-playbook -i inventory deploy-alertmanager.yml
+#
+# Deploy with custom configuration:
+# ansible-playbook -i inventory deploy-alertmanager.yml --tags configure
+#
+# Deploy with advanced clustering:
+# ansible-playbook -i inventory deploy-alertmanager.yml --tags advanced -e alertmanager_clustering_enabled=true
+#
+# Deploy to specific hosts:
+# ansible-playbook -i inventory deploy-alertmanager.yml --limit monitoring_servers
+#
+# Deploy with email notifications:
+# ansible-playbook -i inventory deploy-alertmanager.yml --tags configure -e alertmanager_email_enabled=true
+#
+# Deploy with Slack integration:
+# ansible-playbook -i inventory deploy-alertmanager.yml --tags configure -e alertmanager_slack_enabled=true -e alertmanager_slack_webhook_url=https://hooks.slack.com/...

@@ -1,0 +1,81 @@
+============================================
+PROMETHEUS DEPLOYMENT SUMMARY
+============================================
+
+Deployment Information:
+- Deployment Date: {{ deployment_date }}
+- Ansible User: {{ ansible_user_id }}
+- Target Host: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})
+- Prometheus Version: {{ prometheus_version | default('Latest') }}
+
+Configuration Details:
+- Base Directory: {{ monitoring_base_dir }}/prometheus
+- Data Storage: {{ prometheus_storage_path | default(monitoring_base_dir + '/prometheus/data') }}
+- Configuration Path: {{ prometheus_config_path | default(monitoring_base_dir + '/prometheus/configs') }}
+- Port: {{ prometheus_port | default('9090') }}
+- Retention Period: {{ prometheus_retention | default('30d') }}
+- Log Level: {{ prometheus_log_level | default('info') }}
+
+Access Information:
+- Web UI: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port | default('9090') }}
+- API Endpoint: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port | default('9090') }}/api/v1/
+- Metrics Endpoint: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port | default('9090') }}/metrics
+- Configuration View: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port | default('9090') }}/config
+- Targets View: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port | default('9090') }}/targets
+
+Container Information:
+- Container Name: prometheus
+- Network: {{ monitoring_network_name | default('monitoring') }}
+- Restart Policy: unless-stopped
+
+Key Features Enabled:
+- Web Console: ✓
+- API Access: ✓
+- Lifecycle Management: {{ 'Yes' if prometheus_web_enable_lifecycle | default(true) else 'No' }}
+- Admin API: {{ 'Yes' if prometheus_web_enable_admin_api | default(false) else 'No' }}
+- Storage Persistence: ✓
+
+Default Scrape Targets:
+{% if prometheus_scrape_configs is defined %}
+{% for job in prometheus_scrape_configs %}
+- Job: {{ job.job_name }}
+{% if job.static_configs is defined %}
+{% for config in job.static_configs %}
+  Targets: {{ config.targets | join(', ') }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+Management Commands:
+- Check Status: docker ps --filter name=prometheus
+- View Logs: docker logs prometheus
+- Restart Service: docker restart prometheus
+- Reload Config: curl -X POST http://localhost:{{ prometheus_port | default('9090') }}/-/reload
+
+Configuration Files:
+- Main Config: {{ monitoring_base_dir }}/prometheus/configs/prometheus.yml
+- Recording Rules: {{ monitoring_base_dir }}/prometheus/configs/recording_rules.yml
+- Alerting Rules: {{ monitoring_base_dir }}/prometheus/configs/alerting_rules.yml
+- Docker Compose: {{ monitoring_base_dir }}/prometheus/docker-compose.yml
+
+Important Directories:
+- Data Directory: {{ prometheus_storage_path | default(monitoring_base_dir + '/prometheus/data') }}
+- Config Directory: {{ prometheus_config_path | default(monitoring_base_dir + '/prometheus/configs') }}
+- Logs Directory: {{ monitoring_base_dir }}/prometheus/logs
+
+Next Steps:
+1. Add additional scrape targets to prometheus.yml
+2. Configure alerting rules for your environment
+3. Set up Alertmanager integration for notifications
+4. Create custom dashboards in Grafana
+5. Set up recording rules for performance optimization
+
+For more information:
+- Prometheus Documentation: https://prometheus.io/docs/
+- PromQL Query Language: https://prometheus.io/docs/prometheus/latest/querying/
+- Configuration Reference: https://prometheus.io/docs/prometheus/latest/configuration/
+
+============================================
+Prometheus is ready for monitoring!
+============================================

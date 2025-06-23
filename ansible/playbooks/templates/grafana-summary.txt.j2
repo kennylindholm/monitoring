@@ -1,0 +1,121 @@
+============================================
+GRAFANA DEPLOYMENT SUMMARY
+============================================
+
+Deployment Information:
+- Deployment Date: {{ deployment_date }}
+- Ansible User: {{ ansible_user_id }}
+- Target Host: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})
+- Grafana Version: {{ grafana_version | default('Latest') }}
+
+Configuration Details:
+- Base Directory: {{ monitoring_base_dir }}/grafana
+- Data Path: {{ grafana_data_path | default(monitoring_base_dir + '/grafana/data') }}
+- Configuration Path: {{ grafana_config_path | default(monitoring_base_dir + '/grafana/configs') }}
+- Provisioning Path: {{ grafana_provisioning_path | default(monitoring_base_dir + '/grafana/provisioning') }}
+- Plugins Path: {{ grafana_plugins_path | default(monitoring_base_dir + '/grafana/plugins') }}
+- Port: {{ grafana_port | default('3000') }}
+- Log Level: {{ grafana_log_level | default('info') }}
+
+Access Information:
+- Web UI: http://{{ ansible_default_ipv4.address }}:{{ grafana_port | default('3000') }}
+- API Endpoint: http://{{ ansible_default_ipv4.address }}:{{ grafana_port | default('3000') }}/api/
+- Health Check: http://{{ ansible_default_ipv4.address }}:{{ grafana_port | default('3000') }}/api/health
+- Admin Username: {{ grafana_admin_user | default('admin') }}
+- Admin Password: {{ grafana_admin_password | default('admin123') }}
+
+Container Information:
+- Container Name: grafana
+- Network: {{ monitoring_network_name | default('monitoring') }}
+- Restart Policy: unless-stopped
+
+Key Features Enabled:
+- Web Interface: ✓
+- API Access: ✓
+- Data Persistence: ✓
+- Plugin Support: ✓
+- Multi-Organization: ✓
+- User Management: ✓
+- Dashboard Import/Export: ✓
+- Alerting: ✓
+
+Default Datasources:
+{% if grafana_datasources is defined %}
+{% for datasource in grafana_datasources %}
+- Name: {{ datasource.name }}
+  Type: {{ datasource.type }}
+  URL: {{ datasource.url }}
+  Default: {{ 'Yes' if datasource.isDefault | default(false) else 'No' }}
+{% endfor %}
+{% endif %}
+
+Installed Plugins:
+- Clock Panel
+- Simple JSON Datasource
+- Worldmap Panel
+- Piechart Panel
+- (Additional plugins can be installed via API or CLI)
+
+Management Commands:
+- Check Status: docker ps --filter name=grafana
+- View Logs: docker logs grafana
+- Restart Service: docker restart grafana
+- Install Plugin: docker exec grafana grafana-cli plugins install <plugin-name>
+- List Plugins: docker exec grafana grafana-cli plugins list-remote
+
+Configuration Files:
+- Main Config: {{ monitoring_base_dir }}/grafana/configs/grafana.ini
+- LDAP Config: {{ monitoring_base_dir }}/grafana/configs/ldap.toml
+- Docker Compose: {{ monitoring_base_dir }}/grafana/docker-compose.yml
+- Provisioning: {{ monitoring_base_dir }}/grafana/provisioning/
+
+Important Directories:
+- Data Directory: {{ grafana_data_path | default(monitoring_base_dir + '/grafana/data') }}
+- Logs Directory: {{ monitoring_base_dir }}/grafana/logs
+- Plugins Directory: {{ grafana_plugins_path | default(monitoring_base_dir + '/grafana/plugins') }}
+- Dashboards: {{ monitoring_base_dir }}/grafana/provisioning/dashboards/
+
+API Endpoints:
+- Health: /api/health
+- Datasources: /api/datasources
+- Dashboards: /api/dashboards
+- Users: /api/users
+- Organizations: /api/orgs
+- Alerts: /api/alerts
+- Annotations: /api/annotations
+
+Security Settings:
+- Anonymous Access: Disabled
+- User Registration: {{ 'Enabled' if grafana_allow_signup | default(false) else 'Disabled' }}
+- Auto-assign Organization: {{ 'Yes' if grafana_auto_assign_org | default(true) else 'No' }}
+- Default Role: {{ grafana_auto_assign_role | default('Viewer') }}
+
+Optional Features:
+- SMTP Email: {{ 'Enabled' if grafana_smtp_enabled | default(false) else 'Disabled' }}
+- LDAP Auth: {{ 'Enabled' if grafana_ldap_enabled | default(false) else 'Disabled' }}
+- OAuth: {{ 'Enabled' if grafana_oauth_enabled | default(false) else 'Disabled' }}
+- External Image Storage: {{ grafana_image_storage_provider | default('Local') }}
+
+Next Steps:
+1. Change default admin password for security
+2. Configure additional datasources as needed
+3. Import or create custom dashboards
+4. Set up user accounts and permissions
+5. Configure alerting and notifications
+6. Install additional plugins if required
+7. Set up backup procedures for dashboards and data
+
+Dashboard Resources:
+- Grafana Dashboard Library: https://grafana.com/grafana/dashboards/
+- Node Exporter Dashboard: https://grafana.com/grafana/dashboards/1860
+- Docker Monitoring: https://grafana.com/grafana/dashboards/193
+- Prometheus Stats: https://grafana.com/grafana/dashboards/2
+
+For more information:
+- Grafana Documentation: https://grafana.com/docs/
+- API Documentation: https://grafana.com/docs/grafana/latest/http_api/
+- Plugin Development: https://grafana.com/docs/grafana/latest/developers/plugins/
+
+============================================
+Grafana is ready for visualization!
+============================================

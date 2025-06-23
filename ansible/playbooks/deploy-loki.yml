@@ -1,0 +1,430 @@
+---
+- name: Deploy Loki
+  hosts: monitoring_servers
+  become: true
+  gather_facts: true
+
+  vars:
+    # Override default variables as needed
+    monitoring_base_dir: /opt/monitoring
+    monitoring_network_name: monitoring
+
+    # Loki specific configuration
+    loki_port: 3100
+    loki_grpc_port: 9095
+    loki_retention_period: "744h"
+    loki_log_level: "info"
+    loki_data_path: "{{ monitoring_base_dir }}/loki/data"
+    loki_config_path: "{{ monitoring_base_dir }}/loki/configs"
+    loki_wal_path: "{{ monitoring_base_dir }}/loki/wal"
+    loki_chunk_store_config: "filesystem"
+    loki_schema_config_from: "2020-10-24"
+
+    # Storage configuration
+    loki_storage_config:
+      filesystem:
+        directory: "{{ loki_data_path }}/chunks"
+      boltdb_shipper:
+        active_index_directory: "{{ loki_data_path }}/boltdb-shipper-active"
+        cache_location: "{{ loki_data_path }}/boltdb-shipper-cache"
+        shared_store: filesystem
+
+    # Limits configuration
+    loki_limits_config:
+      retention_period: "{{ loki_retention_period }}"
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: "168h"
+      ingestion_rate_mb: 4
+      ingestion_burst_size_mb: 6
+      max_streams_per_user: 10000
+      max_line_size: 256KB
+
+  pre_tasks:
+    - name: Display deployment information
+      debug:
+        msg: |
+          Starting Loki deployment...
+          Target hosts: {{ ansible_play_hosts | join(', ') }}
+          HTTP Port: {{ loki_port }}
+          gRPC Port: {{ loki_grpc_port }}
+          Retention Period: {{ loki_retention_period }}
+          Data path: {{ loki_data_path }}
+
+    - name: Verify connectivity to all hosts
+      ping:
+
+    - name: Ensure system is updated
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure system is updated (RedHat)
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Check if Docker is installed
+      command: docker --version
+      register: docker_check
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if Docker is not installed
+      fail:
+        msg: "Docker is not installed. Please run the docker installation playbook first."
+      when: docker_check.rc != 0
+
+    - name: Check if monitoring network exists
+      command: docker network inspect {{ monitoring_network_name }}
+      register: network_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create monitoring network if it doesn't exist
+      command: docker network create {{ monitoring_network_name }}
+      when: network_check.rc != 0
+
+  roles:
+    # Deploy common prerequisites first
+    - role: monitoring-common
+      tags: [common, always]
+
+    # Deploy Loki
+    - role: loki
+      tags: [loki, logs, storage]
+
+  post_tasks:
+    - name: Wait for Loki to stabilize
+      pause:
+        seconds: 30
+
+    - name: Verify Loki is accessible
+      uri:
+        url: "http://localhost:{{ loki_port }}/ready"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: loki_ready_check
+      retries: 5
+      delay: 10
+
+    - name: Check Loki metrics endpoint
+      uri:
+        url: "http://localhost:{{ loki_port }}/metrics"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: loki_metrics_check
+      retries: 3
+      delay: 10
+
+    - name: Verify Loki config endpoint
+      uri:
+        url: "http://localhost:{{ loki_port }}/config"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: loki_config_check
+      retries: 3
+      delay: 10
+
+    - name: Test Loki query API
+      uri:
+        url: "http://localhost:{{ loki_port }}/loki/api/v1/labels"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: loki_query_check
+      retries: 3
+      delay: 10
+
+    - name: Display Loki configuration info
+      debug:
+        msg: |
+          Loki configuration summary:
+          - Retention Period: {{ loki_retention_period }}
+          - Storage Type: {{ loki_chunk_store_config }}
+          - Data Directory: {{ loki_data_path }}
+          - WAL Directory: {{ loki_wal_path }}
+      when: loki_config_check is succeeded
+
+    - name: Create Loki summary file
+      template:
+        src: loki-summary.txt.j2
+        dest: "{{ monitoring_base_dir }}/LOKI_SUMMARY.txt"
+        mode: "0644"
+      vars:
+        deployment_date: "{{ ansible_date_time.iso8601 }}"
+
+    - name: Display access information
+      debug:
+        msg: |
+          ============================================
+          Loki Deployment Complete!
+          ============================================
+
+          Access URLs:
+          - Loki API: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}
+          - Loki Query API: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}/loki/api/v1/
+          - Loki Metrics: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}/metrics
+          - Loki Config: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}/config
+          - Ready Check: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}/ready
+
+          Configuration:
+          - HTTP Port: {{ loki_port }}
+          - gRPC Port: {{ loki_grpc_port }}
+          - Retention Period: {{ loki_retention_period }}
+          - Data Path: {{ loki_data_path }}
+          - Storage Type: {{ loki_chunk_store_config }}
+
+          Key Features:
+          - Log aggregation and storage
+          - LogQL query language
+          - Label-based indexing
+          - Prometheus-style service discovery
+          - Grafana integration
+          - Horizontal scalability
+
+          Configuration files: {{ monitoring_base_dir }}/loki
+
+          To check service status:
+          docker ps --filter name=loki
+
+          To view logs:
+          docker logs loki
+
+          To query logs (LogQL examples):
+          - All logs: {job="app"}
+          - Error logs: {job="app"} |= "error"
+          - Rate query: rate({job="app"}[5m])
+
+          To send logs via Promtail:
+          Deploy Promtail on client hosts and configure with Loki endpoint
+
+          ============================================
+
+- name: Configure Loki
+  hosts: monitoring_servers
+  become: true
+  gather_facts: false
+  tags: [configure, never]
+
+  tasks:
+    - name: Configure custom retention policies
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/loki/configs/loki.yml"
+        marker: "# {mark} CUSTOM RETENTION POLICIES"
+        insertafter: "limits_config:"
+        block: |
+          retention_stream:
+            - selector: '{job="debug"}'
+              priority: 1
+              period: 24h
+            - selector: '{job="app", level="error"}'
+              priority: 2
+              period: 30d
+            - selector: '{job="app"}'
+              priority: 3
+              period: 7d
+      notify: restart loki
+      tags: [loki-retention]
+
+    - name: Configure table manager for retention
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/loki/configs/loki.yml"
+        marker: "# {mark} TABLE MANAGER CONFIGURATION"
+        insertafter: "schema_config:"
+        block: |
+          table_manager:
+            retention_deletes_enabled: true
+            retention_period: {{ loki_retention_period }}
+            chunk_tables_provisioning:
+              inactive_read_throughput: 0
+              inactive_write_throughput: 0
+              provisioned_read_throughput: 0
+              provisioned_write_throughput: 0
+            index_tables_provisioning:
+              inactive_read_throughput: 0
+              inactive_write_throughput: 0
+              provisioned_read_throughput: 0
+              provisioned_write_throughput: 0
+      notify: restart loki
+      tags: [loki-table-manager]
+
+    - name: Configure query limits
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/loki/configs/loki.yml"
+        marker: "# {mark} QUERY LIMITS"
+        insertafter: "limits_config:"
+        block: |
+          max_query_parallelism: 32
+          max_query_series: 500
+          max_query_range: 720h
+          max_streams_matchers_per_query: 1000
+          max_concurrent_tail_requests: 10
+          max_cache_freshness_per_query: 10m
+      notify: restart loki
+      tags: [loki-query-limits]
+
+    - name: Setup log rotation for Loki
+      copy:
+        content: |
+          {{ loki_data_path }}/loki.log {
+              daily
+              rotate 7
+              compress
+              delaycompress
+              missingok
+              notifempty
+              create 644 root root
+              postrotate
+                  docker kill -s HUP loki 2>/dev/null || true
+              endscript
+          }
+        dest: /etc/logrotate.d/loki
+        mode: "0644"
+      tags: [loki-logrotate]
+
+  handlers:
+    - name: restart loki
+      command: docker restart loki
+
+# Advanced configuration playbook for multi-tenant and cloud storage
+- name: Advanced Loki Configuration
+  hosts: monitoring_servers
+  become: true
+  gather_facts: false
+  tags: [advanced, never]
+
+  tasks:
+    - name: Configure S3 storage backend
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/loki/configs/loki.yml"
+        marker: "# {mark} S3 STORAGE CONFIGURATION"
+        insertafter: "storage_config:"
+        block: |
+          aws:
+            s3: {{ loki_s3_bucket }}
+            region: {{ loki_s3_region }}
+            access_key_id: {{ loki_s3_access_key }}
+            secret_access_key: {{ loki_s3_secret_key }}
+            s3forcepathstyle: {{ loki_s3_force_path_style | default(false) | lower }}
+          boltdb_shipper:
+            active_index_directory: {{ loki_data_path }}/boltdb-shipper-active
+            cache_location: {{ loki_data_path }}/boltdb-shipper-cache
+            shared_store: s3
+      when:
+        - loki_storage_backend == "s3"
+        - loki_s3_bucket is defined
+        - loki_s3_region is defined
+      notify: restart loki
+
+    - name: Configure multi-tenancy
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/loki/configs/loki.yml"
+        marker: "# {mark} MULTI-TENANT CONFIGURATION"
+        insertafter: "auth_enabled:"
+        block: |
+          auth_enabled: true
+          server:
+            http_listen_port: {{ loki_port }}
+            grpc_listen_port: {{ loki_grpc_port }}
+            log_level: {{ loki_log_level }}
+      when: loki_multitenancy_enabled | default(false)
+      notify: restart loki
+
+    - name: Setup Loki clustering
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/loki/configs/loki.yml"
+        marker: "# {mark} CLUSTERING CONFIGURATION"
+        insertafter: "memberlist:"
+        block: |
+          memberlist:
+            join_members:
+              {% for host in groups['monitoring_servers'] %}
+              {% if host != inventory_hostname %}
+              - {{ hostvars[host]['ansible_default_ipv4']['address'] }}:7946
+              {% endif %}
+              {% endfor %}
+            bind_port: 7946
+            advertise_port: 7946
+      when:
+        - loki_clustering_enabled | default(false)
+        - groups['monitoring_servers'] | length > 1
+      notify: restart loki
+
+    - name: Configure ruler for alerting
+      blockinfile:
+        path: "{{ monitoring_base_dir }}/loki/configs/loki.yml"
+        marker: "# {mark} RULER CONFIGURATION"
+        insertafter: "ruler:"
+        block: |
+          ruler:
+            storage:
+              type: local
+              local:
+                directory: {{ loki_data_path }}/rules
+            rule_path: {{ loki_data_path }}/rules-temp
+            alertmanager_url: http://alertmanager:9093
+            ring:
+              kvstore:
+                store: inmemory
+            enable_api: true
+            enable_alertmanager_v2: true
+      when: loki_ruler_enabled | default(false)
+      notify: restart loki
+
+    - name: Create sample alerting rules
+      copy:
+        content: |
+          groups:
+            - name: loki_alerts
+              rules:
+                - alert: LokiProcessTooManyRestarts
+                  expr: changes(process_start_time_seconds{job=~"loki"}[15m]) > 2
+                  for: 0m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: Loki process too many restarts
+                    description: "A loki process had too many restarts (target {{ $labels.instance }})"
+
+                - alert: LokiRequestErrors
+                  expr: 100 * sum(rate(loki_request_duration_seconds_count{status_code=~"5.."}[1m])) by (namespace, job, route) / sum(rate(loki_request_duration_seconds_count[1m])) by (namespace, job, route) > 10
+                  for: 15m
+                  labels:
+                    severity: critical
+                  annotations:
+                    summary: Loki request errors
+                    description: "The {{ $labels.job }} and {{ $labels.route }} are experiencing errors"
+        dest: "{{ loki_data_path }}/rules/alerts.yml"
+        mode: "0644"
+      when: loki_ruler_enabled | default(false)
+      notify: restart loki
+
+  handlers:
+    - name: restart loki
+      command: docker restart loki
+
+# Usage examples:
+# Deploy Loki:
+# ansible-playbook -i inventory deploy-loki.yml
+#
+# Deploy with custom configuration:
+# ansible-playbook -i inventory deploy-loki.yml --tags configure
+#
+# Deploy with advanced features:
+# ansible-playbook -i inventory deploy-loki.yml --tags advanced -e loki_storage_backend=s3
+#
+# Deploy to specific hosts:
+# ansible-playbook -i inventory deploy-loki.yml --limit monitoring_servers
+#
+# Deploy with custom retention:
+# ansible-playbook -i inventory deploy-loki.yml -e loki_retention_period=1440h
+#
+# Deploy with multi-tenancy:
+# ansible-playbook -i inventory deploy-loki.yml --tags advanced -e loki_multitenancy_enabled=true

@@ -144,7 +144,7 @@
 - name: Configure cAdvisor
   hosts: monitoring_servers
   become: true
-  gather_facts: no
+  gather_facts: false
   tags: [configure, never]
 
   tasks:
@@ -209,7 +209,7 @@
 - name: Advanced cAdvisor Configuration
   hosts: monitoring_servers
   become: true
-  gather_facts: no
+  gather_facts: false
   tags: [advanced, never]
 
   tasks:

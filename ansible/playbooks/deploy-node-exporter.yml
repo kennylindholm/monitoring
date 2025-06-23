@@ -1,8 +1,8 @@
 ---
 - name: Deploy Node Exporter
   hosts: client_hosts
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   vars:
     # Override default variables as needed
@@ -155,8 +155,8 @@
 
 - name: Configure Node Exporter
   hosts: monitoring_servers
-  become: yes
-  gather_facts: no
+  become: true
+  gather_facts: false
   tags: [configure, never]
 
   tasks:

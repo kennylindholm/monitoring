@@ -1,8 +1,8 @@
 ---
 - name: Deploy All Monitoring Stack Components
   hosts: monitoring_servers
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   vars:
     # Global configuration
@@ -164,8 +164,8 @@
 # Minimal deployment playbook
 - name: Deploy Minimal Monitoring Stack
   hosts: monitoring_servers
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
   tags: [minimal, never]
 
   vars:
@@ -183,8 +183,8 @@
 # Update monitoring stack playbook
 - name: Update Monitoring Stack Components
   hosts: monitoring_servers
-  become: yes
-  gather_facts: no
+  become: true
+  gather_facts: false
   tags: [update, never]
 
   tasks:
@@ -216,8 +216,8 @@
 # Backup monitoring data playbook
 - name: Backup Monitoring Stack Data
   hosts: monitoring_servers
-  become: yes
-  gather_facts: no
+  become: true
+  gather_facts: false
   tags: [backup, never]
 
   tasks:

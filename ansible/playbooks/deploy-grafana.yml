@@ -170,28 +170,7 @@
           - Provisioning Path: {{ grafana_provisioning_path }}
           - Plugins Path: {{ grafana_plugins_path }}
 
-          Key Features:
-          - Interactive dashboards and visualizations
-          - Multiple datasource support
-          - Alerting and notifications
-          - User management and permissions
-          - Plugin ecosystem
-          - API for automation
-
           Configuration files: {{ monitoring_base_dir }}/grafana
-
-          To check service status:
-          docker ps --filter name=grafana
-
-          To view logs:
-          docker logs grafana
-
-          To install plugins:
-          docker exec grafana grafana-cli plugins install <plugin-name>
-
-          To backup/restore:
-          {{ monitoring_base_dir }}/scripts/backup-grafana.sh
-          {{ monitoring_base_dir }}/scripts/restore-grafana.sh
 
           ============================================
 
@@ -299,23 +278,6 @@
   tags: [advanced, never]
 
   tasks:
-    - name: Configure LDAP authentication
-      template:
-        src: ldap.toml.j2
-        dest: "{{ monitoring_base_dir }}/grafana/configs/ldap.toml"
-        mode: "0644"
-      when: grafana_ldap_enabled | default(false)
-      notify: restart grafana
-
-    - name: Enable LDAP in Grafana config
-      lineinfile:
-        path: "{{ monitoring_base_dir }}/grafana/configs/grafana.ini"
-        regexp: "^;?enabled = false"
-        line: "enabled = true"
-        insertafter: "\\[auth.ldap\\]"
-      when: grafana_ldap_enabled | default(false)
-      notify: restart grafana
-
     - name: Configure OAuth integration
       blockinfile:
         path: "{{ monitoring_base_dir }}/grafana/configs/grafana.ini"

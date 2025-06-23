@@ -6,7 +6,7 @@ grafana_base_dir: "/opt/monitoring/grafana"
 
 # Grafana service configuration
 grafana_port: 3000
-grafana_image: "grafana/grafana:latest"
+grafana_image: "grafana/grafana:12.0.2"
 
 # Grafana user/group IDs (matching the official image)
 grafana_user_id: "472"
@@ -23,7 +23,7 @@ grafana_root_url: "http://{{ grafana_domain }}:{{ grafana_port }}"
 # Security settings
 grafana_allow_sign_up: false
 grafana_anonymous_enabled: false
-grafana_anonymous_org_name: "Main Org."
+grafana_anonymous_org_name: "Goobit"
 grafana_anonymous_org_role: "Viewer"
 
 # SMTP configuration (for alerts)
@@ -102,7 +102,7 @@ grafana_network_name: "monitoring"
 grafana_network_external: true
 
 # Storage settings
-grafana_storage_size: "2GB"
+grafana_storage_size: "5GB"
 
 # Grafana environment variables
 grafana_env_vars:

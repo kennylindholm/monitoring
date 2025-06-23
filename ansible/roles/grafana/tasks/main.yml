@@ -49,19 +49,28 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0644"
+  register: grafana_compose_updated
   notify: restart grafana
 
-- name: Check if Grafana is already running
-  command: docker ps -q --filter name=grafana
-  register: grafana_status
-  changed_when: false
-  failed_when: false
+- name: Pull latest Grafana image
+  command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml pull
+  args:
+    chdir: "{{ grafana_base_dir }}"
+  register: grafana_image_pulled
+  changed_when: "'Downloaded newer image' in grafana_image_pulled.stderr or 'Pulled' in grafana_image_pulled.stderr"
 
-- name: Start Grafana
+- name: Deploy/Update Grafana container
+  command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml up -d --force-recreate
+  args:
+    chdir: "{{ grafana_base_dir }}"
+  when: grafana_compose_updated.changed or grafana_image_pulled.changed
+  register: grafana_deployed
+
+- name: Start Grafana if not running
   command: docker compose -p grafana -f {{ grafana_base_dir }}/docker-compose.yml up -d
   args:
     chdir: "{{ grafana_base_dir }}"
-  when: grafana_status.stdout == ""
+  when: not (grafana_compose_updated.changed or grafana_image_pulled.changed)
 
 - name: Wait for Grafana to be ready
   wait_for:

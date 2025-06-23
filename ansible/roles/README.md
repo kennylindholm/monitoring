@@ -286,18 +286,14 @@ monitoring_backup_retention_days: 7
 
 ### Updates
 
-To update components:
+For detailed update instructions, see the main [README.md](../../README.md#updating-components).
 
-```bash
-# Pull latest images
-ansible-playbook -i inventory update-monitoring.yml --tags update
+Quick update process:
 
-# Or update specific component
-docker pull prom/prometheus:latest
-cd /opt/monitoring/prometheus
-docker compose down
-docker compose up -d
-```
+1. Update image version in role's `vars/main.yml`
+2. Run the deployment command (e.g., `make deploy-grafana`)
+
+The deployment will automatically handle image pulling and container recreation.
 
 ### Health Checks
 

@@ -46,13 +46,6 @@
         cache_valid_time: 3600
       when: ansible_os_family == "Debian"
 
-    - name: Ensure system is updated (RedHat)
-      yum:
-        name: "*"
-        state: latest
-        update_cache: yes
-      when: ansible_os_family == "RedHat"
-
     - name: Check if Docker is installed
       command: docker --version
       register: docker_check
@@ -350,7 +343,6 @@
         url: "http://localhost:{{ prometheus_port }}/-/reload"
         method: POST
         status_code: 200
-
 # Usage examples:
 # Deploy Prometheus:
 # ansible-playbook -i inventory deploy-prometheus.yml

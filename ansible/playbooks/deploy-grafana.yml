@@ -59,13 +59,6 @@
         cache_valid_time: 3600
       when: ansible_os_family == "Debian"
 
-    - name: Ensure system is updated (RedHat)
-      yum:
-        name: "*"
-        state: latest
-        update_cache: yes
-      when: ansible_os_family == "RedHat"
-
     - name: Check if Docker is installed
       command: docker --version
       register: docker_check
@@ -361,7 +354,6 @@
   handlers:
     - name: restart grafana
       command: docker restart grafana
-
 # Usage examples:
 # Deploy Grafana:
 # ansible-playbook -i inventory deploy-grafana.yml

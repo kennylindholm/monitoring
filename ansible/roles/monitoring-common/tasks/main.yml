@@ -12,26 +12,6 @@
     state: present
   when: ansible_os_family == "Debian"
 
-- name: Install Docker prerequisites (RedHat)
-  package:
-    name:
-      - yum-utils
-      - device-mapper-persistent-data
-      - lvm2
-      - python3-pip
-    state: present
-  when: ansible_os_family == "RedHat"
-
-- name: Install Docker Python SDK via pip (RedHat)
-  pip:
-    name:
-      - docker
-      - docker-compose
-    state: present
-  when:
-    - ansible_os_family == "RedHat"
-    - not ansible_check_mode
-
 - name: Ensure Docker is installed and running
   service:
     name: docker
@@ -167,18 +147,3 @@
     proto: tcp
   loop: "{{ monitoring_firewall_ports }}"
   when: monitoring_configure_firewall and ansible_os_family == "Debian"
-
-- name: Set up firewall rules for monitoring services (RedHat)
-  firewalld:
-    port: "{{ item }}/tcp"
-    permanent: yes
-    state: enabled
-  loop: "{{ monitoring_firewall_ports }}"
-  when: monitoring_configure_firewall and ansible_os_family == "RedHat"
-  notify: restart firewalld
-
-- name: Reload firewalld
-  systemd:
-    name: firewalld
-    state: reloaded
-  when: monitoring_configure_firewall and ansible_os_family == "RedHat" and not ansible_check_mode

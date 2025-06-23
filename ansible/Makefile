@@ -1,7 +1,7 @@
 # Ansible Monitoring Stack Makefile
 # Common operations for managing Docker and Monitoring Stack via Ansible
 
-.PHONY: help ping install check syntax lint clean docker-status \
+.PHONY: help ping docker-status \
         deploy-prometheus deploy-grafana deploy-loki deploy-alertmanager \
         deploy-node-exporter deploy-cadvisor deploy-promtail \
         monitoring-status monitoring-logs \
@@ -20,13 +20,13 @@ help:
 	@echo "  docker-status           - Test Docker installation"
 	@echo ""
 	@echo "Monitoring Stack:"
-	@echo "  deploy-grafana          - Deploy only Grafana"
-	@echo "  deploy-loki             - Deploy only Loki"
-	@echo "  deploy-prometheus       - Deploy only Prometheus"
-	@echo "  deploy-alertmanager     - Deploy only Alertmanager"
-	@echo "  deploy-promtail         - Deploy Promtail on client hosts"
-	@echo "  deploy-node-exporter    - Deploy Node Exporter on client hosts"
-	@echo "  deploy-cadvisor         - Deploy cAdvisor on client hosts"
+	@echo "  deploy-grafana          - Deploy Grafana"
+	@echo "  deploy-loki             - Deploy Loki"
+	@echo "  deploy-prometheus       - Deploy Prometheus"
+	@echo "  deploy-alertmanager     - Deploy Alertmanager"
+	@echo "  deploy-promtail         - Deploy Promtail on client_hosts"
+	@echo "  deploy-node-exporter    - Deploy Node Exporter on client_hosts"
+	@echo "  deploy-cadvisor         - Deploy cAdvisor on docker_hosts"
 	@echo ""
 	@echo "Monitoring Stack - Management:"
 	@echo "  monitoring-status       - Check status of all monitoring services"
@@ -55,36 +55,10 @@ help:
 	@echo "  validate-config         - Validate monitoring configuration"
 	@echo "  show-versions           - Show deployed component versions"
 	@echo ""
-	@echo "Development & Testing:"
-	@echo "  check                   - Run playbook in check mode (dry run)"
-	@echo "  syntax                  - Check playbook syntax"
-	@echo "  lint                    - Lint playbooks with ansible-lint"
-	@echo "  test-role               - Test specific role (requires ROLE=name)"
-	@echo "  clean                   - Clean up temporary files"
-	@echo ""
 	@echo "Security & Vault:"
 	@echo "  create-vault            - Create new Ansible vault file"
 	@echo "  edit-vault              - Edit existing Ansible vault file"
-	@echo ""
-	@echo "Convenient Aliases:"
-	@echo "  status                  - Alias for monitoring-status"
-	@echo "  logs                    - Alias for monitoring-logs"
-	@echo "  start                   - Alias for monitoring-start"
-	@echo "  stop                    - Alias for monitoring-stop"
-	@echo "  restart                 - Alias for monitoring-restart"
-	@echo "  backup                  - Alias for monitoring-backup"
-	@echo "  urls                    - Alias for monitoring-urls"
-	@echo "  deploy                  - Alias for deploy-all"
-	@echo "  help                    - Show this help message"
-	@echo ""
-	@echo "Examples:"
-	@echo "  make deploy-all"
-	@echo "  make deploy-prometheus EXTRA_VARS='prometheus_retention=90d'"
-	@echo "  make deploy-grafana"
-	@echo "  make monitoring-logs SERVICE=prometheus"
-	@echo "  make tail-logs SERVICE=grafana"
-	@echo "  make deploy-promtail"
-	@echo "  make test-role ROLE=prometheus"
+
 
 # Test connectivity to all servers
 ping:
@@ -99,34 +73,7 @@ docker-status:
 	ansible monitoring_servers -a "docker --version"
 	ansible monitoring_servers -a "docker compose version"
 
-# Run in check mode (dry run)
-check:
-	ansible-playbook site.yml --check
 
-# Check syntax of playbooks
-syntax:
-	ansible-playbook site.yml --syntax-check
-	ansible-playbook playbooks/deploy-prometheus.yml --syntax-check
-	ansible-playbook playbooks/deploy-grafana.yml --syntax-check
-	ansible-playbook playbooks/deploy-loki.yml --syntax-check
-	ansible-playbook playbooks/deploy-alertmanager.yml --syntax-check
-	ansible-playbook playbooks/deploy-node-exporter.yml --syntax-check
-	ansible-playbook playbooks/deploy-cadvisor.yml --syntax-check
-	ansible-playbook playbooks/deploy-promtail.yml --syntax-check
-	ansible-playbook playbooks/install-docker.yml --syntax-check
-
-# Lint playbooks (requires ansible-lint)
-lint:
-	@which ansible-lint > /dev/null || (echo "ansible-lint not found. Install with: pip install ansible-lint" && exit 1)
-	ansible-lint site.yml
-	ansible-lint playbooks/deploy-prometheus.yml
-	ansible-lint playbooks/deploy-grafana.yml
-	ansible-lint playbooks/deploy-loki.yml
-	ansible-lint playbooks/deploy-alertmanager.yml
-	ansible-lint playbooks/deploy-node-exporter.yml
-	ansible-lint playbooks/deploy-cadvisor.yml
-	ansible-lint playbooks/deploy-promtail.yml
-	ansible-lint playbooks/install-docker.yml
 
 # Deploy individual components using dedicated playbooks
 deploy-prometheus:
@@ -219,11 +166,7 @@ restart-alertmanager:
 restart-cadvisor:
 	ansible monitoring_servers -m shell -a "cd /opt/monitoring/cadvisor && docker compose restart" --become
 
-# Clean up temporary files
-clean:
-	find . -name "*.retry" -delete
-	find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-	find . -name "*.pyc" -delete
+
 
 # Show inventory
 inventory:
@@ -249,12 +192,7 @@ tail-logs:
 	@if [ -z "$(SERVICE)" ]; then echo "Usage: make tail-logs SERVICE=prometheus"; exit 1; fi
 	ansible monitoring_servers -m shell -a "docker logs -f --tail 100 $(SERVICE)" --become
 
-# Development helpers
-test-role:
-	@if [ -z "$(ROLE)" ]; then echo "Usage: make test-role ROLE=prometheus"; exit 1; fi
-	@if [ ! -f "playbooks/deploy-$(ROLE).yml" ]; then echo "Playbook deploy-$(ROLE).yml does not exist"; exit 1; fi
-	@echo "Testing role: $(ROLE)"
-	ansible-playbook --check playbooks/deploy-$(ROLE).yml $(ANSIBLE_ARGS)
+
 
 create-vault:
 	ansible-vault create group_vars/all/vault.yml
@@ -264,10 +202,11 @@ edit-vault:
 
 # Show component versions
 show-versions:
-	@echo "Checking deployed component versions..."
-	@ansible monitoring_servers -m shell -a "docker ps --format 'table {{.Names}}\t{{.Image}}' | grep -E 'prometheus|grafana|loki|alertmanager|cadvisor'" --become
-	@echo "Checking Promtail versions on client hosts..."
-	@ansible client_hosts -m shell -a "systemctl status promtail | grep Active" --become
+	@echo "=== Docker Container Versions ==="
+	@ansible monitoring_servers -m shell -a "docker ps" --become || true
+	@echo ""
+	@echo "=== Promtail Status ==="
+	@ansible client_hosts -m shell -a "systemctl is-active promtail || echo 'inactive'" --become || true
 
 # Check client hosts exporters
 check-exporters:
@@ -280,4 +219,3 @@ check-exporters:
 ANSIBLE_ARGS ?=
 EXTRA_VARS ?=
 SERVICE ?=
-ROLE ?=

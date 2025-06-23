@@ -21,11 +21,6 @@
     monitoring_deploy_alertmanager: true
     monitoring_deploy_cadvisor: true
 
-    # Note: Containerized node-exporter and promtail have been removed.
-    # For host-based monitoring, use:
-    # - Native node_exporter installation (see node_exporter docs)
-    # - deploy-promtail-host.yml playbook for host-based promtail
-
   pre_tasks:
     - name: Display deployment information
       debug:

@@ -25,7 +25,7 @@ help:
 	@echo "  deploy-monitoring-all   - Deploy all monitoring components (recommended)"
 	@echo "  deploy-grafana          - Deploy only Grafana"
 	@echo "  deploy-loki             - Deploy only Loki"
-	@echo "  deploy-promtail-host    - Deploy Promtail on client hosts (non-containerized)"
+	@echo "  deploy-promtail         - Deploy Promtail on client hosts (non-containerized)"
 	@echo "  deploy-prometheus       - Deploy only Prometheus"
 	@echo "  deploy-alertmanager     - Deploy only Alertmanager"
 	@echo "  deploy-exporters        - Deploy Node Exporter and cAdvisor"
@@ -83,7 +83,7 @@ help:
 	@echo "  make deploy-prometheus EXTRA_VARS='prometheus_retention=90d'"
 	@echo "  make monitoring-logs SERVICE=prometheus"
 	@echo "  make tail-logs SERVICE=grafana"
-	@echo "  make deploy-promtail-host"
+	@echo "  make deploy-promtail"
 	@echo "  make test-role ROLE=prometheus"
 
 
@@ -152,8 +152,8 @@ deploy-exporters:
 
 
 # Deploy Promtail directly on host servers (not in containers)
-deploy-promtail-host:
-	ansible-playbook playbooks/deploy-promtail-host.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+deploy-promtail:
+	ansible-playbook playbooks/deploy-promtail.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 # Monitoring management commands
 monitoring-status:

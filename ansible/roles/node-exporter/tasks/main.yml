@@ -1,0 +1,92 @@
+---
+- name: Create Node Exporter directories
+  file:
+    path: "{{ node_exporter_base_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+
+- name: Copy Docker Compose file for Node Exporter
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ node_exporter_base_dir }}/docker-compose.yml"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  notify: restart node-exporter
+
+- name: Check if Node Exporter is already running
+  command: docker ps -q --filter name=node-exporter
+  register: node_exporter_status
+  changed_when: false
+  failed_when: false
+  when: not ansible_check_mode
+
+- name: Start Node Exporter
+  command: docker compose -p node-exporter -f {{ node_exporter_base_dir }}/docker-compose.yml up -d
+  args:
+    chdir: "{{ node_exporter_base_dir }}"
+  when:
+    - not ansible_check_mode
+    - node_exporter_status is defined
+    - node_exporter_status.stdout == ""
+
+- name: Wait for Node Exporter to be ready
+  wait_for:
+    port: "{{ node_exporter_port }}"
+    host: localhost
+    delay: 10
+    timeout: 120
+  when: not ansible_check_mode
+
+- name: Verify Node Exporter is running
+  uri:
+    url: "http://localhost:{{ node_exporter_port }}/metrics"
+    method: GET
+    status_code: 200
+    timeout: 30
+  register: node_exporter_test
+  retries: 5
+  delay: 10
+  when: not ansible_check_mode
+
+- name: Check Node Exporter metrics endpoint
+  uri:
+    url: "http://localhost:{{ node_exporter_port }}/metrics"
+    method: GET
+    status_code: 200
+  register: node_exporter_metrics
+  failed_when: false
+
+- name: Verify system metrics are present
+  assert:
+    that:
+      - "'node_cpu_seconds_total' in node_exporter_metrics.content"
+      - "'node_memory_MemTotal_bytes' in node_exporter_metrics.content"
+      - "'node_filesystem_size_bytes' in node_exporter_metrics.content"
+      - "'node_network_receive_bytes_total' in node_exporter_metrics.content"
+    fail_msg: "Node Exporter is not collecting expected system metrics"
+    success_msg: "Node Exporter is collecting system metrics successfully"
+  when: node_exporter_metrics is defined and node_exporter_metrics.content is defined
+
+- name: Display Node Exporter URL
+  debug:
+    msg: |
+      Node Exporter deployed successfully!
+
+      Service is available at:
+      - Metrics endpoint: http://{{ ansible_default_ipv4.address }}:{{ node_exporter_port }}/metrics
+
+      Key metrics being collected:
+      - CPU usage (node_cpu_seconds_total)
+      - Memory usage (node_memory_*)
+      - Disk usage (node_filesystem_*)
+      - Network I/O (node_network_*)
+      - Load average (node_load*)
+      - System uptime (node_boot_time_seconds)
+
+      To add this to Prometheus, use the following scrape config:
+        - job_name: 'node-exporter'
+          static_configs:
+            - targets: ['{{ ansible_default_ipv4.address }}:{{ node_exporter_port }}']

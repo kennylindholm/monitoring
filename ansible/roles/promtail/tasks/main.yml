@@ -1,5 +1,5 @@
 ---
-# Main tasks for promtail-host role
+# Main tasks for promtail role
 
 - name: Update apt cache
   apt:

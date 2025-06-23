@@ -1,0 +1,71 @@
+Node Exporter Deployment Summary
+=====================================
+
+Deployment Information:
+- Date: {{ deployment_date }}
+- Host: {{ inventory_hostname }}
+- IP Address: {{ ansible_default_ipv4.address }}
+- OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+- Architecture: {{ ansible_architecture }}
+
+Service Configuration:
+- Port: {{ node_exporter_port | default('9100') }}
+- Base Directory: {{ node_exporter_base_dir | default('/opt/monitoring/node-exporter') }}
+- Container Name: {{ node_exporter_container_name | default('node-exporter') }}
+- Image: {{ node_exporter_image | default('prom/node-exporter:latest') }}
+- Log Level: {{ node_exporter_log_level | default('info') }}
+
+Enabled Collectors:
+{% for collector in node_exporter_enabled_collectors | default([]) %}
+- {{ collector }}
+{% endfor %}
+
+Access URLs:
+- Metrics Endpoint: http://{{ ansible_default_ipv4.address }}:{{ node_exporter_port | default('9100') }}/metrics
+
+Key Metrics Available:
+- CPU Usage: node_cpu_seconds_total
+- Memory Usage: node_memory_*
+- Disk Usage: node_filesystem_*
+- Network I/O: node_network_*
+- Load Average: node_load1, node_load5, node_load15
+- System Uptime: node_boot_time_seconds
+- Process Statistics: node_procs_*
+- Network Statistics: node_netstat_*
+- Filesystem Statistics: node_filesystem_*
+
+Configuration Files:
+- Docker Compose: {{ node_exporter_base_dir | default('/opt/monitoring/node-exporter') }}/docker-compose.yml
+
+Management Commands:
+- Check Status: docker ps --filter name=node-exporter
+- View Logs: docker logs node-exporter
+- Restart Service: docker restart node-exporter
+- Stop Service: docker stop node-exporter
+- Start Service: docker start node-exporter
+
+Prometheus Scrape Configuration:
+```yaml
+scrape_configs:
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['{{ ansible_default_ipv4.address }}:{{ node_exporter_port | default('9100') }}']
+    scrape_interval: 15s
+    metrics_path: /metrics
+```
+
+Health Check:
+- URL: http://{{ ansible_default_ipv4.address }}:{{ node_exporter_port | default('9100') }}/metrics
+- Expected Response: HTTP 200 with Prometheus metrics format
+
+Troubleshooting:
+- Check container logs: docker logs node-exporter
+- Verify network connectivity: telnet {{ ansible_default_ipv4.address }} {{ node_exporter_port | default('9100') }}
+- Check Docker network: docker network inspect {{ monitoring_network_name | default('monitoring') }}
+- Restart service: cd {{ node_exporter_base_dir | default('/opt/monitoring/node-exporter') }} && docker compose restart
+
+Notes:
+- Node Exporter runs in host network mode for accurate system metrics
+- Requires access to /proc, /sys, and root filesystem
+- Metrics are exposed in Prometheus format
+- Service restarts automatically on failure

@@ -1,0 +1,152 @@
+version: '3.8'
+
+services:
+  node-exporter:
+    image: {{ node_exporter_image }}
+    container_name: {{ node_exporter_container_name }}
+    ports:
+      - "{{ node_exporter_port }}:9100"
+    volumes:
+{% for volume in node_exporter_volumes %}
+      - {{ volume }}
+{% endfor %}
+{% for volume in node_exporter_additional_volumes %}
+      - {{ volume }}
+{% endfor %}
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+{% if node_exporter_web_listen_address %}
+      - '--web.listen-address={{ node_exporter_web_listen_address }}'
+{% endif %}
+{% if node_exporter_web_telemetry_path %}
+      - '--web.telemetry-path={{ node_exporter_web_telemetry_path }}'
+{% endif %}
+{% if node_exporter_web_disable_exporter_metrics %}
+      - '--web.disable-exporter-metrics'
+{% endif %}
+{% if node_exporter_web_max_requests %}
+      - '--web.max-requests={{ node_exporter_web_max_requests }}'
+{% endif %}
+{% if node_exporter_log_level %}
+      - '--log.level={{ node_exporter_log_level }}'
+{% endif %}
+{% if node_exporter_log_format %}
+      - '--log.format={{ node_exporter_log_format }}'
+{% endif %}
+{% if node_exporter_enabled_collectors %}
+{% for collector in node_exporter_enabled_collectors %}
+      - '--collector.{{ collector }}'
+{% endfor %}
+{% endif %}
+{% if node_exporter_disabled_collectors %}
+{% for collector in node_exporter_disabled_collectors %}
+      - '--no-collector.{{ collector }}'
+{% endfor %}
+{% endif %}
+{% if node_exporter_filesystem_ignored_mount_points %}
+      - '--collector.filesystem.mount-points-exclude={{ node_exporter_filesystem_ignored_mount_points }}'
+{% endif %}
+{% if node_exporter_filesystem_ignored_fs_types %}
+      - '--collector.filesystem.fs-types-exclude={{ node_exporter_filesystem_ignored_fs_types }}'
+{% endif %}
+{% if node_exporter_netdev_device_blacklist %}
+      - '--collector.netdev.device-blacklist={{ node_exporter_netdev_device_blacklist }}'
+{% endif %}
+{% if node_exporter_netstat_fields %}
+      - '--collector.netstat.fields={{ node_exporter_netstat_fields }}'
+{% endif %}
+{% if node_exporter_textfile_directory %}
+      - '--collector.textfile.directory={{ node_exporter_textfile_directory }}'
+{% endif %}
+{% if node_exporter_cpu_info %}
+      - '--collector.cpu.info'
+{% endif %}
+{% if node_exporter_systemd_enable %}
+      - '--collector.systemd'
+{% endif %}
+{% if node_exporter_systemd_enable_task_metrics %}
+      - '--collector.systemd.enable-task-metrics'
+{% endif %}
+{% if node_exporter_systemd_enable_restarts_metrics %}
+      - '--collector.systemd.enable-restarts-metrics'
+{% endif %}
+{% if node_exporter_systemd_enable_start_time_metrics %}
+      - '--collector.systemd.enable-start-time-metrics'
+{% endif %}
+{% if node_exporter_hwmon_chip_blacklist %}
+      - '--collector.hwmon.chip-blacklist={{ node_exporter_hwmon_chip_blacklist }}'
+{% endif %}
+{% if node_exporter_ntp_server %}
+      - '--collector.ntp.server={{ node_exporter_ntp_server }}'
+{% endif %}
+{% if node_exporter_ntp_protocol_version %}
+      - '--collector.ntp.protocol-version={{ node_exporter_ntp_protocol_version }}'
+{% endif %}
+{% if node_exporter_ntp_server_is_local %}
+      - '--collector.ntp.server-is-local'
+{% endif %}
+{% if node_exporter_ntp_ip_ttl %}
+      - '--collector.ntp.ip-ttl={{ node_exporter_ntp_ip_ttl }}'
+{% endif %}
+{% if node_exporter_supervisord_url %}
+      - '--collector.supervisord.url={{ node_exporter_supervisord_url }}'
+{% endif %}
+{% if node_exporter_perf_cpus %}
+      - '--collector.perf.cpus={{ node_exporter_perf_cpus }}'
+{% endif %}
+{% if node_exporter_perf_tracepoint %}
+      - '--collector.perf.tracepoint={{ node_exporter_perf_tracepoint }}'
+{% endif %}
+{% if node_exporter_powersupply_ignored_supplies %}
+      - '--collector.powersupply.ignored-supplies={{ node_exporter_powersupply_ignored_supplies }}'
+{% endif %}
+{% if node_exporter_runit_servicedir %}
+      - '--collector.runit.servicedir={{ node_exporter_runit_servicedir }}'
+{% endif %}
+{% if node_exporter_thermal_zone_device_blacklist %}
+      - '--collector.thermal_zone.device-blacklist={{ node_exporter_thermal_zone_device_blacklist }}'
+{% endif %}
+{% for arg in node_exporter_additional_args %}
+      - '{{ arg }}'
+{% endfor %}
+    restart: {{ node_exporter_restart_policy }}
+    pid: host
+    network_mode: host
+{% if node_exporter_security_opt %}
+    security_opt:
+{% for opt in node_exporter_security_opt %}
+      - {{ opt }}
+{% endfor %}
+{% endif %}
+{% if node_exporter_cap_add %}
+    cap_add:
+{% for cap in node_exporter_cap_add %}
+      - {{ cap }}
+{% endfor %}
+{% endif %}
+{% if node_exporter_cap_drop %}
+    cap_drop:
+{% for cap in node_exporter_cap_drop %}
+      - {{ cap }}
+{% endfor %}
+{% endif %}
+{% if node_exporter_env_vars %}
+    environment:
+{% for key, value in node_exporter_env_vars.items() %}
+      - {{ key }}={{ value }}
+{% endfor %}
+{% endif %}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9100/metrics"]
+      interval: {{ node_exporter_healthcheck_interval }}
+      timeout: {{ node_exporter_healthcheck_timeout }}
+      retries: {{ node_exporter_healthcheck_retries }}
+      start_period: {{ node_exporter_healthcheck_start_period }}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

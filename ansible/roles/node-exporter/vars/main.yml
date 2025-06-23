@@ -1,0 +1,144 @@
+---
+# Node Exporter role variables
+
+# Base directory for Node Exporter
+node_exporter_base_dir: "/opt/monitoring/node-exporter"
+
+# Node Exporter service configuration
+node_exporter_port: 9100
+node_exporter_image: "prom/node-exporter:latest"
+
+# Node Exporter configuration
+node_exporter_web_listen_address: "0.0.0.0:9100"
+node_exporter_web_telemetry_path: "/metrics"
+node_exporter_web_disable_exporter_metrics: false
+node_exporter_web_max_requests: 40
+
+# Log configuration
+node_exporter_log_level: "info"
+node_exporter_log_format: "logfmt"
+
+# Collectors configuration - enabled by default
+node_exporter_enabled_collectors:
+  - arp
+  - bcache
+  - conntrack
+  - cpu
+  - cpufreq
+  - diskstats
+  - edac
+  - entropy
+  - filefd
+  - filesystem
+  - hwmon
+  - infiniband
+  - loadavg
+  - mdadm
+  - meminfo
+  - netdev
+  - netstat
+  - sockstat
+  - stat
+  - textfile
+  - time
+  - timex
+  - uname
+  - vmstat
+  - xfs
+  - zfs
+
+# Collectors to disable
+node_exporter_disabled_collectors: []
+
+# Filesystem collector configuration
+node_exporter_filesystem_ignored_mount_points: "^/(dev|proc|sys|var/lib/docker/.+)($|/)"
+node_exporter_filesystem_ignored_fs_types: "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
+
+# Network collector configuration
+node_exporter_netdev_device_blacklist: "^(veth.*|docker.*|br-.*|lo)$"
+node_exporter_netstat_fields: "^(.*_(InErrors|InErrs)|Ip_Forwarding|Ip(6|Ext)_(InOctets|OutOctets)|Icmp6?_(InMsgs|OutMsgs)|TcpExt_(Listen.*|Syncookies.*|TCPSynRetrans)|Tcp_(ActiveOpens|PassiveOpens|RetransSegs|CurrEstab)|Udp6?_(InDatagrams|OutDatagrams|NoPorts|RcvbufErrors|SndbufErrors))$"
+
+# Textfile collector configuration
+node_exporter_textfile_directory: "/var/lib/node_exporter/textfile_collector"
+
+# CPU collector configuration
+node_exporter_cpu_info: true
+
+# Docker configuration
+node_exporter_container_name: "node-exporter"
+node_exporter_restart_policy: "unless-stopped"
+
+# Network settings
+node_exporter_network_name: "monitoring"
+node_exporter_network_external: true
+
+# Volumes to mount
+node_exporter_volumes:
+  - /proc:/host/proc:ro
+  - /sys:/host/sys:ro
+  - /:/rootfs:ro
+  - /etc/hostname:/etc/nodename:ro
+  - /etc/localtime:/etc/localtime:ro
+
+# Additional volumes (user-defined)
+node_exporter_additional_volumes: []
+
+# Environment variables
+node_exporter_env_vars:
+  HOST_PROC: /host/proc
+  HOST_SYS: /host/sys
+  HOST_ROOT: /rootfs
+
+# Security options
+node_exporter_security_opt: []
+
+# Container capabilities
+node_exporter_cap_add: []
+node_exporter_cap_drop: []
+
+# Health check settings
+node_exporter_healthcheck_interval: "30s"
+node_exporter_healthcheck_timeout: "10s"
+node_exporter_healthcheck_retries: 3
+node_exporter_healthcheck_start_period: "40s"
+
+# Process monitoring
+node_exporter_process_monitoring: false
+
+# SystemD collector configuration
+node_exporter_systemd_enable: true
+node_exporter_systemd_enable_task_metrics: false
+node_exporter_systemd_enable_restarts_metrics: false
+node_exporter_systemd_enable_start_time_metrics: false
+
+# Hardware monitoring
+node_exporter_hwmon_chip_blacklist: ""
+
+# NTP configuration
+node_exporter_ntp_server: ""
+node_exporter_ntp_protocol_version: 4
+node_exporter_ntp_server_is_local: false
+node_exporter_ntp_ip_ttl: 1
+
+# Supervisord configuration
+node_exporter_supervisord_url: "http://localhost:9001/RPC2"
+
+# Perf configuration
+node_exporter_perf_cpus: ""
+node_exporter_perf_tracepoint: ""
+
+# Powersupply configuration
+node_exporter_powersupply_ignored_supplies: "^$"
+
+# runit configuration
+node_exporter_runit_servicedir: "/etc/service"
+
+# Thermal zone configuration
+node_exporter_thermal_zone_device_blacklist: ""
+
+# Additional command line arguments
+node_exporter_additional_args: []
+
+# User and group for file permissions
+node_exporter_user: "{{ ansible_user }}"
+node_exporter_group: "{{ ansible_user }}"

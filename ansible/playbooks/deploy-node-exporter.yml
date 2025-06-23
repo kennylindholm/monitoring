@@ -1,0 +1,218 @@
+---
+- name: Deploy Node Exporter
+  hosts: monitoring_servers
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # Override default variables as needed
+    monitoring_base_dir: /opt/monitoring
+    monitoring_network_name: monitoring
+
+    # Node Exporter specific configuration
+    node_exporter_port: 9100
+    node_exporter_log_level: "info"
+    node_exporter_enabled_collectors:
+      - arp
+      - bcache
+      - conntrack
+      - cpu
+      - cpufreq
+      - diskstats
+      - entropy
+      - filefd
+      - filesystem
+      - hwmon
+      - loadavg
+      - meminfo
+      - netdev
+      - netstat
+      - sockstat
+      - stat
+      - textfile
+      - time
+      - timex
+      - uname
+      - vmstat
+
+  pre_tasks:
+    - name: Display deployment information
+      debug:
+        msg: |
+          Starting Node Exporter deployment...
+          Target hosts: {{ ansible_play_hosts | join(', ') }}
+          Port: {{ node_exporter_port }}
+          Log level: {{ node_exporter_log_level }}
+
+    - name: Verify connectivity to all hosts
+      ping:
+
+    - name: Ensure system is updated
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure system is updated (RedHat)
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Check if Docker is installed
+      command: docker --version
+      register: docker_check
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if Docker is not installed
+      fail:
+        msg: "Docker is not installed. Please run the docker installation playbook first."
+      when: docker_check.rc != 0
+
+    - name: Check if monitoring network exists
+      command: docker network inspect {{ monitoring_network_name }}
+      register: network_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create monitoring network if it doesn't exist
+      command: docker network create {{ monitoring_network_name }}
+      when: network_check.rc != 0
+
+  roles:
+    # Deploy common prerequisites first
+    - role: monitoring-common
+      tags: [common, always]
+
+    # Deploy Node Exporter
+    - role: node-exporter
+      tags: [node-exporter, exporters, metrics]
+
+  post_tasks:
+    - name: Wait for Node Exporter to stabilize
+      pause:
+        seconds: 15
+
+    - name: Verify Node Exporter is accessible
+      uri:
+        url: "http://localhost:{{ node_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: node_exporter_check
+      retries: 3
+      delay: 10
+
+    - name: Display Node Exporter metrics sample
+      debug:
+        msg: |
+          Node Exporter metrics sample:
+          {{ node_exporter_check.content.split('\n')[:10] | join('\n') }}
+      when: node_exporter_check is succeeded
+
+    - name: Create Node Exporter summary file
+      template:
+        src: node-exporter-summary.txt.j2
+        dest: "{{ monitoring_base_dir }}/NODE_EXPORTER_SUMMARY.txt"
+        mode: "0644"
+      vars:
+        deployment_date: "{{ ansible_date_time.iso8601 }}"
+
+    - name: Display access information
+      debug:
+        msg: |
+          ============================================
+          Node Exporter Deployment Complete!
+          ============================================
+
+          Access URLs:
+          - Node Exporter Metrics: http://{{ ansible_default_ipv4.address }}:{{ node_exporter_port }}/metrics
+
+          Key Metrics Available:
+          - CPU usage: node_cpu_seconds_total
+          - Memory usage: node_memory_*
+          - Disk usage: node_filesystem_*
+          - Network I/O: node_network_*
+          - Load average: node_load*
+          - System uptime: node_boot_time_seconds
+
+          Configuration files: {{ monitoring_base_dir }}/node-exporter
+
+          To check service status:
+          docker ps --filter name=node-exporter
+
+          To view logs:
+          docker logs node-exporter
+
+          To add to Prometheus scrape config:
+          - job_name: 'node-exporter'
+            static_configs:
+              - targets: ['{{ ansible_default_ipv4.address }}:{{ node_exporter_port }}']
+
+          ============================================
+
+- name: Configure Node Exporter
+  hosts: monitoring_servers
+  become: yes
+  gather_facts: no
+  tags: [configure, never]
+
+  tasks:
+    - name: Enable additional collectors
+      lineinfile:
+        path: "{{ monitoring_base_dir }}/node-exporter/docker-compose.yml"
+        line: "      - '--collector.{{ item }}'"
+        insertafter: "    command:"
+        state: present
+      loop:
+        - systemd
+        - processes
+        - interrupts
+      notify: restart node-exporter
+
+    - name: Configure textfile collector directory
+      file:
+        path: "{{ node_exporter_textfile_directory | default('/var/lib/node_exporter/textfile_collector') }}"
+        state: directory
+        mode: "0755"
+      when: node_exporter_textfile_directory is defined
+
+    - name: Add custom metrics collection script
+      copy:
+        content: |
+          #!/bin/bash
+          # Custom metrics collection for Node Exporter textfile collector
+          echo "# HELP custom_script_last_run_timestamp Unix timestamp of last script run"
+          echo "# TYPE custom_script_last_run_timestamp gauge"
+          echo "custom_script_last_run_timestamp $(date +%s)"
+        dest: "{{ node_exporter_textfile_directory | default('/var/lib/node_exporter/textfile_collector') }}/custom_metrics.sh"
+        mode: "0755"
+      when: node_exporter_textfile_directory is defined
+
+    - name: Set up cron job for custom metrics
+      cron:
+        name: "Node Exporter custom metrics"
+        minute: "*/5"
+        job: "{{ node_exporter_textfile_directory | default('/var/lib/node_exporter/textfile_collector') }}/custom_metrics.sh > {{ node_exporter_textfile_directory | default('/var/lib/node_exporter/textfile_collector') }}/custom_metrics.prom"
+      when: node_exporter_textfile_directory is defined
+
+  handlers:
+    - name: restart node-exporter
+      command: docker compose -p node-exporter -f {{ monitoring_base_dir }}/node-exporter/docker-compose.yml restart
+      args:
+        chdir: "{{ monitoring_base_dir }}/node-exporter"
+
+# Usage examples:
+# Deploy Node Exporter:
+# ansible-playbook -i inventory deploy-node-exporter.yml
+#
+# Deploy with custom configuration:
+# ansible-playbook -i inventory deploy-node-exporter.yml --tags configure
+#
+# Deploy to specific hosts:
+# ansible-playbook -i inventory deploy-node-exporter.yml --limit monitoring_servers
+#
+# Check deployment status:
+# ansible-playbook -i inventory deploy-node-exporter.yml --tags never --check

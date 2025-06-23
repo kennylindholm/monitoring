@@ -71,9 +71,8 @@
             access: proxy
             url: "http://loki:3100"
 
-    # Deploy exporters
-    - role: cadvisor
-      tags: [cadvisor, exporters, metrics]
+    # Note: Exporters are now deployed via separate playbooks
+    # Run deploy-node-exporter.yml and deploy-cadvisor.yml separately
 
   post_tasks:
     - name: Wait for all services to stabilize
@@ -112,11 +111,10 @@
             Password: {{ grafana_admin_password }}
           - Loki: http://{{ ansible_default_ipv4.address }}:3100
           - Alertmanager: http://{{ ansible_default_ipv4.address }}:9093
-          - Node Exporter: http://{{ ansible_default_ipv4.address }}:9100
-          - cAdvisor: http://{{ ansible_default_ipv4.address }}:8080
-
-          Note: Promtail runs on client hosts (app_servers)
-          To deploy Promtail: ansible-playbook playbooks/deploy-promtail-host.yml
+          Note: Exporters are deployed separately for better modularity
+          To deploy Node Exporter: ansible-playbook playbooks/deploy-node-exporter.yml
+          To deploy cAdvisor: ansible-playbook playbooks/deploy-cadvisor.yml
+          To deploy Promtail: ansible-playbook playbooks/deploy-promtail.yml
 
           Configuration files: {{ monitoring_base_dir }}
 
@@ -215,19 +213,16 @@
       when: deploy_alertmanager
 
     - name: Deploy exporters only
-      include_role:
-        name: "{{ item }}"
-      loop:
-        - node-exporter
-        - cadvisor
+      debug:
+        msg: "Exporters are now deployed via separate playbooks. Use deploy-node-exporter.yml and deploy-cadvisor.yml"
       when: deploy_exporters
 
     - name: Note about Promtail deployment
       debug:
-        msg: "Promtail should be deployed on client hosts using deploy-promtail-host.yml playbook"
+        msg: "Promtail should be deployed on client hosts using deploy-promtail.yml playbook"
       when: deploy_promtail
 # Usage examples:
-# Deploy everything:
+# Deploy core monitoring stack:
 # ansible-playbook -i inventory deploy-monitoring-individual.yml
 #
 # Deploy with specific tags:
@@ -239,8 +234,12 @@
 # Deploy specific components only:
 # ansible-playbook -i inventory deploy-monitoring-individual.yml --tags selective -e prometheus=true -e grafana=true
 #
+# Deploy exporters separately:
+# ansible-playbook -i inventory playbooks/deploy-node-exporter.yml
+# ansible-playbook -i inventory playbooks/deploy-cadvisor.yml
+#
 # Deploy Promtail on client hosts:
-# ansible-playbook -i inventory playbooks/deploy-promtail-host.yml
+# ansible-playbook -i inventory playbooks/deploy-promtail.yml
 
 # Promtail deployment on client hosts
 - name: Deploy Promtail to Application Servers
@@ -278,7 +277,7 @@
       run_once: true
 
   roles:
-    - role: promtail-host
+    - role: promtail
 
   post_tasks:
     - name: Verify Promtail installation

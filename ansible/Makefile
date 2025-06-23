@@ -2,7 +2,6 @@
 # Common operations for managing Docker and Monitoring Stack via Ansible
 
 .PHONY: help ping install check syntax lint clean docker-status \
-        deploy-monitoring-individual \
         deploy-prometheus deploy-grafana deploy-loki deploy-alertmanager \
         deploy-node-exporter deploy-cadvisor deploy-promtail \
         monitoring-status monitoring-logs \
@@ -23,7 +22,6 @@ help:
 	@echo "  docker-status           - Test Docker installation"
 	@echo ""
 	@echo "Monitoring Stack:"
-	@echo "  deploy-monitoring-individual - Deploy all monitoring components"
 	@echo "  deploy-grafana          - Deploy only Grafana"
 	@echo "  deploy-loki             - Deploy only Loki"
 	@echo "  deploy-prometheus       - Deploy only Prometheus"
@@ -80,10 +78,11 @@ help:
 	@echo "  restart                 - Alias for monitoring-restart"
 	@echo "  backup                  - Alias for monitoring-backup"
 	@echo "  urls                    - Alias for monitoring-urls"
+	@echo "  deploy                  - Alias for deploy-all"
 	@echo "  help                    - Show this help message"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make deploy-monitoring-individual"
+	@echo "  make deploy-all"
 	@echo "  make deploy-prometheus EXTRA_VARS='prometheus_retention=90d'"
 	@echo "  make deploy-grafana"
 	@echo "  make monitoring-logs SERVICE=prometheus"
@@ -95,7 +94,7 @@ help:
 ping:
 	ansible monitoring_servers -m ping
 
-# Test connectivity to client hosts (app servers)
+# Test connectivity to client hosts
 ping-clients:
 	ansible client_hosts -m ping
 
@@ -140,16 +139,6 @@ lint:
 	ansible-lint playbooks/deploy-cadvisor.yml
 	ansible-lint playbooks/deploy-promtail.yml
 	ansible-lint playbooks/install-docker.yml
-
-# Deploy all monitoring components (runs all individual playbooks)
-deploy-monitoring-individual:
-	ansible-playbook playbooks/deploy-prometheus.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
-	ansible-playbook playbooks/deploy-grafana.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
-	ansible-playbook playbooks/deploy-loki.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
-	ansible-playbook playbooks/deploy-alertmanager.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
-	ansible-playbook playbooks/deploy-cadvisor.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
-	ansible-playbook playbooks/deploy-node-exporter.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
-	ansible-playbook playbooks/deploy-promtail.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 # Deploy individual components using dedicated playbooks
 deploy-prometheus:
@@ -298,15 +287,6 @@ check-exporters:
 	@ansible client_hosts -m uri -a "url=http://localhost:9100/metrics" --become || echo "Node Exporter not accessible on some hosts"
 	@echo "Checking Promtail on client hosts..."
 	@ansible client_hosts -m uri -a "url=http://localhost:9080/targets" --become || echo "Promtail not accessible on some hosts"
-
-# Useful aliases
-status: monitoring-status
-logs: monitoring-logs
-start: monitoring-start
-stop: monitoring-stop
-restart: monitoring-restart
-backup: monitoring-backup
-urls: monitoring-urls
 
 # Variables that can be overridden
 ANSIBLE_ARGS ?=

@@ -28,11 +28,11 @@
 
     # Default route configuration
     alertmanager_route:
-      group_by: ['alertname']
+      group_by: ["alertname"]
       group_wait: 10s
       group_interval: 10s
       repeat_interval: 1h
-      receiver: 'default'
+      receiver: "default"
 
     # Inhibit rules (optional)
     alertmanager_inhibit_rules: []
@@ -111,7 +111,7 @@
 
     - name: Check Alertmanager API
       uri:
-        url: "http://localhost:{{ alertmanager_port }}/api/v1/status"
+        url: "http://localhost:{{ alertmanager_port }}/api/v2/status"
         method: GET
         status_code: 200
         timeout: 30
@@ -121,7 +121,7 @@
 
     - name: Verify Alertmanager config endpoint
       uri:
-        url: "http://localhost:{{ alertmanager_port }}/api/v1/status/config"
+        url: "http://localhost:{{ alertmanager_port }}/api/v2/status"
         method: GET
         status_code: 200
         timeout: 30
@@ -131,7 +131,7 @@
 
     - name: Check Alertmanager receivers
       uri:
-        url: "http://localhost:{{ alertmanager_port }}/api/v1/receivers"
+        url: "http://localhost:{{ alertmanager_port }}/api/v2/receivers"
         method: GET
         status_code: 200
         timeout: 30
@@ -166,7 +166,7 @@
 
           Access URLs:
           - Alertmanager Web UI: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}
-          - Alertmanager API: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}/api/v1/
+          - Alertmanager API: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}/api/v2/
           - Health Check: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}/-/healthy
           - Ready Check: http://{{ ansible_default_ipv4.address }}:{{ alertmanager_port }}/-/ready
 
@@ -424,7 +424,6 @@
         url: "http://localhost:{{ alertmanager_port }}/-/reload"
         method: POST
         status_code: 200
-
 # Usage examples:
 # Deploy Alertmanager:
 # ansible-playbook -i inventory deploy-alertmanager.yml

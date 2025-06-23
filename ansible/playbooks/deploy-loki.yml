@@ -153,12 +153,94 @@
       when: loki_config_check is succeeded
 
     - name: Create Loki summary file
-      template:
-        src: loki-summary.txt.j2
+      copy:
+        content: |
+          ============================================
+          LOKI DEPLOYMENT SUMMARY
+          ============================================
+
+          Deployment Information:
+          - Deployment Date: {{ ansible_date_time.iso8601 }}
+          - Ansible User: {{ ansible_user_id }}
+          - Target Host: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})
+          - Loki Version: Latest
+
+          Configuration Details:
+          - Base Directory: {{ monitoring_base_dir }}/loki
+          - Data Path: {{ loki_data_path }}
+          - Configuration Path: {{ loki_config_path }}
+          - WAL Path: {{ loki_wal_path }}
+          - HTTP Port: {{ loki_port }}
+          - gRPC Port: {{ loki_grpc_port }}
+          - Log Level: {{ loki_log_level }}
+
+          Access Information:
+          - Loki API: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}
+          - Query API: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}/loki/api/v1/
+          - Metrics Endpoint: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}/metrics
+          - Config View: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}/config
+          - Ready Check: http://{{ ansible_default_ipv4.address }}:{{ loki_port }}/ready
+
+          Container Information:
+          - Container Name: loki
+          - Network: {{ monitoring_network_name }}
+          - Restart Policy: unless-stopped
+
+          Storage Configuration:
+          - Storage Type: {{ loki_chunk_store_config }}
+          - Retention Period: {{ loki_retention_period }}
+          - Schema Version: {{ loki_schema_config_from }}
+
+          Key Features Enabled:
+          - Log Aggregation: ✓
+          - LogQL Query Language: ✓
+          - Label-based Indexing: ✓
+          - Metrics Extraction: ✓
+          - Data Persistence: ✓
+          - Retention Management: ✓
+          - API Access: ✓
+
+          Limits Configuration:
+          - Retention Period: {{ loki_retention_period }}
+          - Ingestion Rate: {{ loki_limits_config.ingestion_rate_mb }}MB/s
+          - Ingestion Burst: {{ loki_limits_config.ingestion_burst_size_mb }}MB
+          - Max Streams per User: {{ loki_limits_config.max_streams_per_user }}
+          - Max Line Size: {{ loki_limits_config.max_line_size }}
+
+          Management Commands:
+          - Check Status: docker ps --filter name=loki
+          - View Logs: docker logs loki
+          - Restart Service: docker restart loki
+          - Check Metrics: curl http://localhost:{{ loki_port }}/metrics
+          - Test Query: curl http://localhost:{{ loki_port }}/loki/api/v1/labels
+
+          Configuration Files:
+          - Main Config: {{ monitoring_base_dir }}/loki/configs/loki.yml
+          - Docker Compose: {{ monitoring_base_dir }}/loki/docker-compose.yml
+
+          LogQL Query Examples:
+          - All logs: {job="app"}
+          - Error logs: {job="app"} |= "error"
+          - Rate query: rate({job="app"}[5m])
+          - JSON parsing: {job="app"} | json | level="error"
+          - Regex filter: {job="app"} |~ "error|exception"
+
+          API Endpoints:
+          - Labels: /loki/api/v1/labels
+          - Query: /loki/api/v1/query
+          - Query Range: /loki/api/v1/query_range
+          - Push: /loki/api/v1/push
+
+          Integration Information:
+          - Grafana Datasource: Add http://loki:3100 as Loki datasource
+          - Promtail Agent: Deploy on client hosts to ship logs
+          - Prometheus Scraping: Metrics available at /metrics endpoint
+
+          ============================================
+          Loki is ready for log aggregation!
+          ============================================
         dest: "{{ monitoring_base_dir }}/LOKI_SUMMARY.txt"
         mode: "0644"
-      vars:
-        deployment_date: "{{ ansible_date_time.iso8601 }}"
 
     - name: Display access information
       debug:
@@ -409,7 +491,6 @@
   handlers:
     - name: restart loki
       command: docker restart loki
-
 # Usage examples:
 # Deploy Loki:
 # ansible-playbook -i inventory deploy-loki.yml

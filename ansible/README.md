@@ -92,7 +92,19 @@ ansible-playbook site.yml
 ansible-playbook playbooks/install-docker.yml
 
 # Deploy complete monitoring stack (requires Docker)
-make deploy-monitoring-individual
+ansible-playbook site.yml --tags monitoring
+
+# Alternative: Deploy all components using make target
+make deploy-all
+
+# Alternative: Deploy all components using individual playbooks
+make deploy-prometheus
+make deploy-grafana
+make deploy-loki
+make deploy-alertmanager
+make deploy-cadvisor
+make deploy-node-exporter
+make deploy-promtail
 
 # Deploy individual components
 ansible-playbook playbooks/deploy-prometheus.yml
@@ -309,7 +321,11 @@ make install-update       # Install Docker with system updates
 make test                 # Test Docker installation
 
 # Monitoring Stack - Full Deployment
-make deploy-monitoring-individual # Deploy complete monitoring stack (recommended)
+ansible-playbook site.yml --tags monitoring # Deploy complete monitoring stack (recommended)
+make deploy-all                             # Deploy all components using individual playbooks
+
+# Alternative: Deploy all components individually
+make deploy-prometheus deploy-grafana deploy-loki deploy-alertmanager deploy-cadvisor deploy-node-exporter deploy-promtail
 
 # Monitoring Stack - Individual Components
 make deploy-prometheus    # Deploy only Prometheus

@@ -23,7 +23,6 @@ This directory contains individual Ansible roles for deploying a complete monito
 ### Supporting Roles
 
 - **monitoring-common** - Common prerequisites and shared configuration
-- **monitoring-meta** - Meta role that orchestrates all components
 
 ## Role Structure
 
@@ -68,9 +67,9 @@ You can use individual roles in your playbook:
     - promtail
 ```
 
-### Using the Meta Role
+### Using Multiple Roles
 
-For a complete stack deployment, use the meta role:
+For a complete stack deployment, use multiple roles:
 
 ```yaml
 ---
@@ -79,12 +78,17 @@ For a complete stack deployment, use the meta role:
   become: yes
 
   roles:
-    - monitoring-meta
+    - monitoring-common
+    - prometheus
+    - grafana
+    - loki
+    - alertmanager
+    - cadvisor
 ```
 
 ### Selective Deployment
 
-You can control which components to deploy:
+You can control which components to deploy using tags:
 
 ```yaml
 ---
@@ -92,17 +96,20 @@ You can control which components to deploy:
   hosts: monitoring_servers
   become: yes
 
-  vars:
-    monitoring_deploy_prometheus: true
-    monitoring_deploy_grafana: true
-    monitoring_deploy_loki: false
-    monitoring_deploy_alertmanager: true
-    monitoring_deploy_node_exporter: true
-    monitoring_deploy_cadvisor: false
-    monitoring_deploy_promtail: false
-
   roles:
-    - monitoring-meta
+    - monitoring-common
+    - role: prometheus
+      tags: [prometheus]
+    - role: grafana
+      tags: [grafana]
+    - role: alertmanager
+      tags: [alertmanager]
+```
+
+Then run with specific tags:
+
+```bash
+ansible-playbook deploy-monitoring.yml --tags prometheus,grafana
 ```
 
 ## Configuration
@@ -236,7 +243,12 @@ Full stack with custom settings:
     alertmanager_receiver_email: "ops-team@example.com"
 
   roles:
-    - monitoring-meta
+    - monitoring-common
+    - prometheus
+    - grafana
+    - loki
+    - alertmanager
+    - cadvisor
 ```
 
 ### Adding Custom Scrape Targets

@@ -5,8 +5,8 @@
 - import_playbook: playbooks/install-docker.yml
   tags: docker
 
-# Deploy monitoring stack using the meta role approach (recommended)
-- import_playbook: playbooks/deploy-monitoring-all.yml
+# Deploy monitoring stack using individual roles approach
+- import_playbook: playbooks/deploy-monitoring-individual.yml
   tags: monitoring
 
 # Deploy host-based Promtail for log collection

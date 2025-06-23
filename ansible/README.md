@@ -12,14 +12,15 @@ ansible/
 │   └── hosts               # Server inventory
 ├── playbooks/
 │   ├── install-docker.yml            # Docker installation playbook
-│   ├── deploy-monitoring-all.yml     # Complete monitoring stack deployment (recommended)
-│   └── deploy-monitoring-individual.yml # Individual component deployment
+│   ├── deploy-monitoring-individual.yml # Individual component deployment
+│   ├── deploy-node-exporter.yml     # Node Exporter deployment
+│   ├── deploy-cadvisor.yml          # cAdvisor deployment
+│   └── deploy-promtail.yml          # Promtail deployment
 ├── roles/
 │   ├── docker/             # Docker installation role
 │   │   ├── tasks/
 │   │   ├── handlers/
 │   │   └── vars/
-│   ├── monitoring-meta/    # Meta role that orchestrates deployment
 │   ├── monitoring-common/  # Common monitoring prerequisites
 │   ├── prometheus/         # Prometheus role
 │   ├── grafana/           # Grafana role
@@ -88,10 +89,15 @@ ansible-playbook site.yml
 ansible-playbook playbooks/install-docker.yml
 
 # Deploy complete monitoring stack (requires Docker)
-ansible-playbook playbooks/deploy-monitoring-all.yml
+ansible-playbook playbooks/deploy-monitoring-individual.yml
 
 # Deploy individual components
 ansible-playbook playbooks/deploy-monitoring-individual.yml --tags prometheus,grafana
+
+# Deploy exporters and log collection
+ansible-playbook playbooks/deploy-node-exporter.yml
+ansible-playbook playbooks/deploy-cadvisor.yml
+ansible-playbook playbooks/deploy-promtail.yml
 
 # Run with system update (recommended for new servers)
 ansible-playbook site.yml -e "update_system=true"
@@ -278,7 +284,7 @@ Test what changes would be made without applying them:
 
 ```bash
 ansible-playbook site.yml --check
-ansible-playbook playbooks/deploy-monitoring-all.yml --check
+ansible-playbook playbooks/deploy-monitoring-individual.yml --check
 ```
 
 ## Security Considerations
@@ -297,16 +303,16 @@ make install-update       # Install Docker with system updates
 make test                 # Test Docker installation
 
 # Monitoring Stack - Full Deployment
-make deploy-monitoring    # Deploy complete monitoring stack (recommended)
-make deploy-monitoring-minimal # Deploy minimal stack (Prometheus + Grafana)
+make deploy-monitoring-individual # Deploy complete monitoring stack (recommended)
 
 # Monitoring Stack - Individual Components
 make deploy-prometheus    # Deploy only Prometheus
 make deploy-grafana      # Deploy only Grafana
 make deploy-loki         # Deploy only Loki
 make deploy-alertmanager # Deploy only Alertmanager
-make deploy-exporters    # Deploy Node Exporter and cAdvisor
-make deploy-collectors   # Deploy Promtail
+make deploy-node-exporter # Deploy Node Exporter
+make deploy-cadvisor     # Deploy cAdvisor
+make deploy-promtail     # Deploy Promtail
 
 # Monitoring Stack - Management
 make monitoring-status    # Show monitoring stack status
@@ -340,16 +346,17 @@ Override default settings:
 
 ```bash
 # Custom Grafana password
-make deploy-monitoring EXTRA_VARS="meta_grafana_admin_password=mysecretpass"
+make deploy-monitoring-individual EXTRA_VARS="grafana_admin_password=mysecretpass"
 
-# Deploy without specific components
-make deploy-monitoring EXTRA_VARS="monitoring_deploy_loki=false monitoring_deploy_alertmanager=false"
+# Deploy specific components only
+ansible-playbook playbooks/deploy-monitoring-individual.yml --tags prometheus,grafana
 
 # Custom ports
-ansible-playbook playbooks/deploy-monitoring-all.yml -e "grafana_port=3001 prometheus_port=9091"
+ansible-playbook playbooks/deploy-monitoring-individual.yml -e "grafana_port=3001 prometheus_port=9091"
 
-# Disable certain components
-ansible-playbook playbooks/deploy-monitoring-all.yml -e "monitoring_deploy_cadvisor=false"
+# Deploy exporters on specific hosts
+ansible-playbook playbooks/deploy-node-exporter.yml --limit client_hosts
+ansible-playbook playbooks/deploy-cadvisor.yml --limit monitoring_servers
 ```
 
 ### Data Persistence

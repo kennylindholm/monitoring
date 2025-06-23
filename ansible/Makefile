@@ -2,7 +2,7 @@
 # Common operations for managing Docker and Monitoring Stack via Ansible
 
 .PHONY: help ping install check syntax lint clean docker-status \
-        deploy-monitoring-all deploy-monitoring-individual \
+        deploy-monitoring-individual \
         deploy-prometheus deploy-grafana deploy-loki deploy-alertmanager \
         deploy-node-exporter deploy-cadvisor deploy-promtail \
         monitoring-status monitoring-logs \
@@ -22,20 +22,17 @@ help:
 	@echo "  docker-install          - Install Docker and Docker Compose"
 	@echo "  docker-status           - Test Docker installation"
 	@echo ""
-	@echo "Monitoring Stack - Full Deployment:"
-	@echo "  deploy-monitoring-all   - Deploy all monitoring components (recommended)"
+	@echo "Monitoring Stack:"
 	@echo "  deploy-monitoring-individual - Deploy using individual roles"
-	@echo ""
-	@echo "Monitoring Stack - Individual Components:"
-	@echo "  deploy-prometheus       - Deploy only Prometheus"
 	@echo "  deploy-grafana          - Deploy only Grafana"
 	@echo "  deploy-loki             - Deploy only Loki"
+	@echo "  deploy-prometheus       - Deploy only Prometheus"
 	@echo "  deploy-alertmanager     - Deploy only Alertmanager"
 	@echo ""
 	@echo "Exporters & Log Shipping:"
+	@echo "  deploy-promtail         - Deploy Promtail on client hosts"
 	@echo "  deploy-node-exporter    - Deploy Node Exporter on client hosts"
 	@echo "  deploy-cadvisor         - Deploy cAdvisor on monitoring servers"
-	@echo "  deploy-promtail         - Deploy Promtail on client hosts"
 	@echo ""
 	@echo "Monitoring Stack - Management:"
 	@echo "  monitoring-status       - Check status of all monitoring services"
@@ -86,8 +83,8 @@ help:
 	@echo "  help                    - Show this help message"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make deploy-monitoring-all"
-	@echo "  make deploy-monitoring-all EXTRA_VARS='monitoring_deploy_loki=false'"
+	@echo "  make deploy-monitoring-individual"
+	@echo "  make deploy-monitoring-individual EXTRA_VARS='monitoring_deploy_loki=false'"
 	@echo "  make deploy-prometheus EXTRA_VARS='prometheus_retention=90d'"
 	@echo "  make monitoring-logs SERVICE=prometheus"
 	@echo "  make tail-logs SERVICE=grafana"
@@ -122,7 +119,6 @@ check:
 # Check syntax of playbooks
 syntax:
 	ansible-playbook site.yml --syntax-check
-	ansible-playbook playbooks/deploy-monitoring-all.yml --syntax-check
 	ansible-playbook playbooks/deploy-monitoring-individual.yml --syntax-check
 	ansible-playbook playbooks/deploy-node-exporter.yml --syntax-check
 	ansible-playbook playbooks/deploy-cadvisor.yml --syntax-check
@@ -133,16 +129,11 @@ syntax:
 lint:
 	@which ansible-lint > /dev/null || (echo "ansible-lint not found. Install with: pip install ansible-lint" && exit 1)
 	ansible-lint site.yml
-	ansible-lint playbooks/deploy-monitoring-all.yml
 	ansible-lint playbooks/deploy-monitoring-individual.yml
 	ansible-lint playbooks/deploy-node-exporter.yml
 	ansible-lint playbooks/deploy-cadvisor.yml
 	ansible-lint playbooks/deploy-promtail.yml
 	ansible-lint playbooks/install-docker.yml
-
-# Deploy all monitoring components using meta role (recommended)
-deploy-monitoring-all:
-	ansible-playbook playbooks/deploy-monitoring-all.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 # Deploy monitoring components using individual roles
 deploy-monitoring-individual:
@@ -211,7 +202,7 @@ monitoring-backup:
 	ansible monitoring_servers -a "/opt/monitoring/backup-monitoring.sh" --become
 
 monitoring-update:
-	ansible-playbook playbooks/deploy-monitoring-all.yml --tags update $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags update $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 # Show monitoring URLs
 monitoring-urls:

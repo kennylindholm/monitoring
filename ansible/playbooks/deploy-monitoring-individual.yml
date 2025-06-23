@@ -214,6 +214,60 @@
       debug:
         msg: "Promtail should be deployed on client hosts using deploy-promtail.yml playbook"
       when: deploy_promtail
+# Update monitoring stack playbook
+- name: Update Monitoring Stack Components
+  hosts: monitoring_servers
+  become: true
+  gather_facts: false
+  tags: [update, never]
+
+  tasks:
+    - name: Pull latest images
+      docker_image:
+        name: "{{ item }}"
+        source: pull
+        force_source: yes
+      loop:
+        - "{{ prometheus_image | default('prom/prometheus:latest') }}"
+        - "{{ grafana_image | default('grafana/grafana:latest') }}"
+        - "{{ loki_image | default('grafana/loki:latest') }}"
+        - "{{ alertmanager_image | default('prom/alertmanager:latest') }}"
+        - "{{ cadvisor_image | default('gcr.io/cadvisor/cadvisor:latest') }}"
+
+    - name: Restart monitoring services
+      shell: |
+        cd {{ monitoring_base_dir }}/{{ item }}
+        docker compose down
+        docker compose up -d
+      loop:
+        - prometheus
+        - grafana
+        - loki
+        - alertmanager
+        - cadvisor
+
+# Backup monitoring data playbook
+- name: Backup Monitoring Stack Data
+  hosts: monitoring_servers
+  become: true
+  gather_facts: false
+  tags: [backup, never]
+
+  tasks:
+    - name: Run backup script
+      command: "{{ monitoring_base_dir }}/backup-monitoring.sh"
+      register: backup_result
+
+    - name: Display backup result
+      debug:
+        var: backup_result.stdout_lines
+
+    - name: Copy backup to remote location
+      synchronize:
+        src: "{{ monitoring_base_dir }}/backups/"
+        dest: "{{ backup_remote_path }}/"
+        mode: push
+      when: backup_remote_path is defined
 # Usage examples:
 # Deploy core monitoring stack:
 # ansible-playbook -i inventory deploy-monitoring-individual.yml
@@ -227,61 +281,15 @@
 # Deploy specific components only:
 # ansible-playbook -i inventory deploy-monitoring-individual.yml --tags selective -e prometheus=true -e grafana=true
 #
+# Update components:
+# ansible-playbook -i inventory deploy-monitoring-individual.yml --tags update
+#
+# Backup data:
+# ansible-playbook -i inventory deploy-monitoring-individual.yml --tags backup
+#
 # Deploy exporters separately:
 # ansible-playbook -i inventory playbooks/deploy-node-exporter.yml
 # ansible-playbook -i inventory playbooks/deploy-cadvisor.yml
 #
 # Deploy Promtail on client hosts:
 # ansible-playbook -i inventory playbooks/deploy-promtail.yml
-
-# Promtail deployment on client hosts
-- name: Deploy Promtail to Application Servers
-  hosts: client_hosts
-  become: true
-  gather_facts: true
-  tags: [promtail-clients, never]
-
-  pre_tasks:
-    - name: Display deployment information
-      debug:
-        msg: |
-          Starting Promtail deployment to application servers...
-          Target hosts: {{ ansible_play_hosts | join(', ') }}
-          Loki server: {{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:3100
-
-    - name: Verify connectivity to all hosts
-      ping:
-
-    - name: Check if Loki is accessible
-      uri:
-        url: "http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:3100/ready"
-        method: GET
-        status_code: 200
-        timeout: 10
-      delegate_to: localhost
-      run_once: true
-      register: loki_check
-      failed_when: false
-
-    - name: Warn if Loki is not accessible
-      debug:
-        msg: "WARNING: Loki server is not accessible. Promtail will be installed but may not be able to send logs."
-      when: loki_check is failed or loki_check.status is not defined or loki_check.status != 200
-      run_once: true
-
-  roles:
-    - role: promtail
-
-  post_tasks:
-    - name: Verify Promtail installation
-      systemd:
-        name: promtail
-      register: promtail_status
-
-    - name: Display Promtail status
-      debug:
-        msg: |
-          Promtail deployment completed on {{ inventory_hostname }}
-          Service status: {{ promtail_status.status.ActiveState }}
-          Metrics: http://{{ ansible_default_ipv4.address }}:9080/metrics
-          Targets: http://{{ ansible_default_ipv4.address }}:9080/targets

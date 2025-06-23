@@ -13,9 +13,7 @@ help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "Connectivity & Testing:"
-	@echo "  ping                    - Test connectivity to monitoring servers"
-	@echo "  ping-clients            - Test connectivity to client hosts"
-	@echo "  ping-all                - Test connectivity to all servers"
+	@echo "  ping                    - Test connectivity to all hosts"
 	@echo ""
 	@echo "Docker Installation:"
 	@echo "  docker-install          - Install Docker and Docker Compose"
@@ -26,11 +24,9 @@ help:
 	@echo "  deploy-loki             - Deploy only Loki"
 	@echo "  deploy-prometheus       - Deploy only Prometheus"
 	@echo "  deploy-alertmanager     - Deploy only Alertmanager"
-	@echo ""
-	@echo "Exporters & Log Shipping:"
 	@echo "  deploy-promtail         - Deploy Promtail on client hosts"
 	@echo "  deploy-node-exporter    - Deploy Node Exporter on client hosts"
-	@echo "  deploy-cadvisor         - Deploy cAdvisor on monitoring servers"
+	@echo "  deploy-cadvisor         - Deploy cAdvisor on client hosts"
 	@echo ""
 	@echo "Monitoring Stack - Management:"
 	@echo "  monitoring-status       - Check status of all monitoring services"
@@ -90,16 +86,8 @@ help:
 	@echo "  make deploy-promtail"
 	@echo "  make test-role ROLE=prometheus"
 
-# Test connectivity to monitoring servers
-ping:
-	ansible monitoring_servers -m ping
-
-# Test connectivity to client hosts
-ping-clients:
-	ansible client_hosts -m ping
-
 # Test connectivity to all servers
-ping-all:
+ping:
 	ansible all -m ping
 
 # Install Docker on servers

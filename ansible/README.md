@@ -12,7 +12,10 @@ ansible/
 │   └── hosts               # Server inventory
 ├── playbooks/
 │   ├── install-docker.yml            # Docker installation playbook
-│   ├── deploy-monitoring-individual.yml # Individual component deployment
+│   ├── deploy-prometheus.yml         # Prometheus deployment
+│   ├── deploy-grafana.yml           # Grafana deployment
+│   ├── deploy-loki.yml              # Loki deployment
+│   ├── deploy-alertmanager.yml      # Alertmanager deployment
 │   ├── deploy-node-exporter.yml     # Node Exporter deployment
 │   ├── deploy-cadvisor.yml          # cAdvisor deployment
 │   └── deploy-promtail.yml          # Promtail deployment
@@ -89,10 +92,13 @@ ansible-playbook site.yml
 ansible-playbook playbooks/install-docker.yml
 
 # Deploy complete monitoring stack (requires Docker)
-ansible-playbook playbooks/deploy-monitoring-individual.yml
+make deploy-monitoring-individual
 
 # Deploy individual components
-ansible-playbook playbooks/deploy-monitoring-individual.yml --tags prometheus,grafana
+ansible-playbook playbooks/deploy-prometheus.yml
+ansible-playbook playbooks/deploy-grafana.yml
+ansible-playbook playbooks/deploy-loki.yml
+ansible-playbook playbooks/deploy-alertmanager.yml
 
 # Deploy exporters and log collection
 ansible-playbook playbooks/deploy-node-exporter.yml
@@ -284,7 +290,7 @@ Test what changes would be made without applying them:
 
 ```bash
 ansible-playbook site.yml --check
-ansible-playbook playbooks/deploy-monitoring-individual.yml --check
+make check
 ```
 
 ## Security Considerations
@@ -346,13 +352,15 @@ Override default settings:
 
 ```bash
 # Custom Grafana password
-make deploy-monitoring-individual EXTRA_VARS="grafana_admin_password=mysecretpass"
+make deploy-grafana EXTRA_VARS="grafana_admin_password=mysecretpass"
 
 # Deploy specific components only
-ansible-playbook playbooks/deploy-monitoring-individual.yml --tags prometheus,grafana
+make deploy-prometheus
+make deploy-grafana
 
 # Custom ports
-ansible-playbook playbooks/deploy-monitoring-individual.yml -e "grafana_port=3001 prometheus_port=9091"
+make deploy-grafana EXTRA_VARS="grafana_port=3001"
+make deploy-prometheus EXTRA_VARS="prometheus_port=9091"
 
 # Deploy exporters on specific hosts
 ansible-playbook playbooks/deploy-node-exporter.yml --limit client_hosts

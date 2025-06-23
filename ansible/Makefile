@@ -23,7 +23,7 @@ help:
 	@echo "  docker-status           - Test Docker installation"
 	@echo ""
 	@echo "Monitoring Stack:"
-	@echo "  deploy-monitoring-individual - Deploy using individual roles"
+	@echo "  deploy-monitoring-individual - Deploy all monitoring components"
 	@echo "  deploy-grafana          - Deploy only Grafana"
 	@echo "  deploy-loki             - Deploy only Loki"
 	@echo "  deploy-prometheus       - Deploy only Prometheus"
@@ -84,8 +84,8 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make deploy-monitoring-individual"
-	@echo "  make deploy-monitoring-individual EXTRA_VARS='monitoring_deploy_loki=false'"
 	@echo "  make deploy-prometheus EXTRA_VARS='prometheus_retention=90d'"
+	@echo "  make deploy-grafana"
 	@echo "  make monitoring-logs SERVICE=prometheus"
 	@echo "  make tail-logs SERVICE=grafana"
 	@echo "  make deploy-promtail"
@@ -119,7 +119,10 @@ check:
 # Check syntax of playbooks
 syntax:
 	ansible-playbook site.yml --syntax-check
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --syntax-check
+	ansible-playbook playbooks/deploy-prometheus.yml --syntax-check
+	ansible-playbook playbooks/deploy-grafana.yml --syntax-check
+	ansible-playbook playbooks/deploy-loki.yml --syntax-check
+	ansible-playbook playbooks/deploy-alertmanager.yml --syntax-check
 	ansible-playbook playbooks/deploy-node-exporter.yml --syntax-check
 	ansible-playbook playbooks/deploy-cadvisor.yml --syntax-check
 	ansible-playbook playbooks/deploy-promtail.yml --syntax-check
@@ -129,28 +132,37 @@ syntax:
 lint:
 	@which ansible-lint > /dev/null || (echo "ansible-lint not found. Install with: pip install ansible-lint" && exit 1)
 	ansible-lint site.yml
-	ansible-lint playbooks/deploy-monitoring-individual.yml
+	ansible-lint playbooks/deploy-prometheus.yml
+	ansible-lint playbooks/deploy-grafana.yml
+	ansible-lint playbooks/deploy-loki.yml
+	ansible-lint playbooks/deploy-alertmanager.yml
 	ansible-lint playbooks/deploy-node-exporter.yml
 	ansible-lint playbooks/deploy-cadvisor.yml
 	ansible-lint playbooks/deploy-promtail.yml
 	ansible-lint playbooks/install-docker.yml
 
-# Deploy monitoring components using individual roles
+# Deploy all monitoring components (runs all individual playbooks)
 deploy-monitoring-individual:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-prometheus.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-grafana.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-loki.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-alertmanager.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-cadvisor.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-node-exporter.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-promtail.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
-# Deploy individual components using role-specific tags
+# Deploy individual components using dedicated playbooks
 deploy-prometheus:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags prometheus $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-prometheus.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 deploy-grafana:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags grafana $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-grafana.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 deploy-loki:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags loki $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-loki.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 deploy-alertmanager:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags alertmanager $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-alertmanager.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 # Deploy exporters using dedicated playbooks
 deploy-node-exporter:
@@ -202,7 +214,13 @@ monitoring-backup:
 	ansible monitoring_servers -a "/opt/monitoring/backup-monitoring.sh" --become
 
 monitoring-update:
-	ansible-playbook playbooks/deploy-monitoring-individual.yml --tags update $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-prometheus.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-grafana.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-loki.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-alertmanager.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-cadvisor.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-node-exporter.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-promtail.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 # Show monitoring URLs
 monitoring-urls:
@@ -257,9 +275,9 @@ tail-logs:
 # Development helpers
 test-role:
 	@if [ -z "$(ROLE)" ]; then echo "Usage: make test-role ROLE=prometheus"; exit 1; fi
-	@if [ ! -d "roles/$(ROLE)" ]; then echo "Role $(ROLE) does not exist"; exit 1; fi
+	@if [ ! -f "playbooks/deploy-$(ROLE).yml" ]; then echo "Playbook deploy-$(ROLE).yml does not exist"; exit 1; fi
 	@echo "Testing role: $(ROLE)"
-	ansible-playbook -i inventories/hosts --check playbooks/deploy-monitoring-individual.yml --tags $(ROLE)
+	ansible-playbook --check playbooks/deploy-$(ROLE).yml $(ANSIBLE_ARGS)
 
 create-vault:
 	ansible-vault create group_vars/all/vault.yml

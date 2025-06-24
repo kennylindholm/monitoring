@@ -6,7 +6,7 @@ prometheus_base_dir: "/opt/monitoring/prometheus"
 
 # Prometheus service configuration
 prometheus_port: 9090
-prometheus_image: "prom/prometheus:latest"
+prometheus_image: "prom/prometheus:v2.45.0"
 
 # Prometheus user/group IDs (matching the official image)
 prometheus_user_id: "65534"

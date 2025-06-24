@@ -41,19 +41,28 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0644"
+  register: alertmanager_compose_updated
   notify: restart alertmanager
 
-- name: Check if Alertmanager is already running
-  command: docker ps -q --filter name=alertmanager
-  register: alertmanager_status
-  changed_when: false
-  failed_when: false
+- name: Pull latest Alertmanager image
+  command: docker compose -p alertmanager -f {{ alertmanager_base_dir }}/docker-compose.yml pull
+  args:
+    chdir: "{{ alertmanager_base_dir }}"
+  register: alertmanager_image_pulled
+  changed_when: "'Downloaded newer image' in alertmanager_image_pulled.stderr or 'Pulled' in alertmanager_image_pulled.stderr"
 
-- name: Start Alertmanager
+- name: Deploy/Update Alertmanager container
+  command: docker compose -p alertmanager -f {{ alertmanager_base_dir }}/docker-compose.yml up -d --force-recreate
+  args:
+    chdir: "{{ alertmanager_base_dir }}"
+  when: alertmanager_compose_updated.changed or alertmanager_image_pulled.changed
+  register: alertmanager_deployed
+
+- name: Start Alertmanager if not running
   command: docker compose -p alertmanager -f {{ alertmanager_base_dir }}/docker-compose.yml up -d
   args:
     chdir: "{{ alertmanager_base_dir }}"
-  when: alertmanager_status.stdout == ""
+  when: not (alertmanager_compose_updated.changed or alertmanager_image_pulled.changed)
 
 - name: Wait for Alertmanager to be ready
   wait_for:

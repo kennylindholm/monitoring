@@ -54,19 +54,28 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0644"
+  register: prometheus_compose_updated
   notify: restart prometheus
 
-- name: Check if Prometheus is already running
-  command: docker ps -q --filter name=prometheus
-  register: prometheus_status
-  changed_when: false
-  failed_when: false
+- name: Pull latest Prometheus image
+  command: docker compose -p prometheus -f {{ prometheus_base_dir }}/docker-compose.yml pull
+  args:
+    chdir: "{{ prometheus_base_dir }}"
+  register: prometheus_image_pulled
+  changed_when: "'Downloaded newer image' in prometheus_image_pulled.stderr or 'Pulled' in prometheus_image_pulled.stderr"
 
-- name: Start Prometheus
+- name: Deploy/Update Prometheus container
+  command: docker compose -p prometheus -f {{ prometheus_base_dir }}/docker-compose.yml up -d --force-recreate
+  args:
+    chdir: "{{ prometheus_base_dir }}"
+  when: prometheus_compose_updated.changed or prometheus_image_pulled.changed
+  register: prometheus_deployed
+
+- name: Start Prometheus if not running
   command: docker compose -p prometheus -f {{ prometheus_base_dir }}/docker-compose.yml up -d
   args:
     chdir: "{{ prometheus_base_dir }}"
-  when: prometheus_status.stdout == ""
+  when: not (prometheus_compose_updated.changed or prometheus_image_pulled.changed)
 
 - name: Wait for Prometheus to be ready
   wait_for:

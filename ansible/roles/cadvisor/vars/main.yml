@@ -6,7 +6,7 @@ cadvisor_base_dir: "/opt/monitoring/cadvisor"
 
 # cAdvisor service configuration
 cadvisor_port: 8080
-cadvisor_image: "gcr.io/cadvisor/cadvisor:latest"
+cadvisor_image: "gcr.io/cadvisor/cadvisor:v0.47.0"
 
 # cAdvisor configuration
 cadvisor_privileged: true
@@ -40,7 +40,7 @@ cadvisor_docker_tls_ca: ""
 cadvisor_max_procs: 0
 
 # Log configuration
-cadvisor_log_level: 0  # 0=INFO, 1=WARNING, 2=ERROR
+cadvisor_log_level: 0 # 0=INFO, 1=WARNING, 2=ERROR
 cadvisor_event_storage_age_limit: "default=0"
 cadvisor_event_storage_event_limit: "default=0"
 

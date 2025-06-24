@@ -6,7 +6,7 @@ node_exporter_base_dir: "/opt/monitoring/node-exporter"
 
 # Node Exporter service configuration
 node_exporter_port: 9100
-node_exporter_image: "prom/node-exporter:latest"
+node_exporter_image: "prom/node-exporter:v1.6.1"
 
 # Node Exporter configuration
 node_exporter_web_listen_address: "0.0.0.0:9100"

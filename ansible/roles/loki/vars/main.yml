@@ -6,7 +6,7 @@ loki_base_dir: "/opt/monitoring/loki"
 
 # Loki service configuration
 loki_port: 3100
-loki_image: "grafana/loki:latest"
+loki_image: "grafana/loki:2.9.0"
 
 # Loki user/group IDs (matching the official image)
 loki_user_id: "10001"

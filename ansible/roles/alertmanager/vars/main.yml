@@ -6,7 +6,7 @@ alertmanager_base_dir: "/opt/monitoring/alertmanager"
 
 # Alertmanager service configuration
 alertmanager_port: 9093
-alertmanager_image: "prom/alertmanager:latest"
+alertmanager_image: "prom/alertmanager:v0.25.0"
 
 # Alertmanager user/group IDs (matching the official image)
 alertmanager_user_id: "65534"
@@ -61,7 +61,7 @@ alertmanager_webhook_url: ""
 alertmanager_webhook_max_alerts: 0
 
 # Default route configuration
-alertmanager_route_group_by: ['alertname', 'cluster', 'service']
+alertmanager_route_group_by: ["alertname", "cluster", "service"]
 alertmanager_route_group_wait: "10s"
 alertmanager_route_group_interval: "10s"
 alertmanager_route_repeat_interval: "1h"
@@ -80,7 +80,7 @@ alertmanager_routes: []
 
 # Receivers configuration
 alertmanager_receivers:
-  - name: 'default'
+  - name: "default"
     email_configs: []
     slack_configs: []
     pagerduty_configs: []

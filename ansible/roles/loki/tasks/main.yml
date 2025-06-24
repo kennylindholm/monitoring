@@ -26,19 +26,28 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0644"
+  register: loki_compose_updated
   notify: restart loki
 
-- name: Check if Loki is already running
-  command: docker ps -q --filter name=loki
-  register: loki_status
-  changed_when: false
-  failed_when: false
+- name: Pull latest Loki image
+  command: docker compose -p loki -f {{ loki_base_dir }}/docker-compose.yml pull
+  args:
+    chdir: "{{ loki_base_dir }}"
+  register: loki_image_pulled
+  changed_when: "'Downloaded newer image' in loki_image_pulled.stderr or 'Pulled' in loki_image_pulled.stderr"
 
-- name: Start Loki
+- name: Deploy/Update Loki container
+  command: docker compose -p loki -f {{ loki_base_dir }}/docker-compose.yml up -d --force-recreate
+  args:
+    chdir: "{{ loki_base_dir }}"
+  when: loki_compose_updated.changed or loki_image_pulled.changed
+  register: loki_deployed
+
+- name: Start Loki if not running
   command: docker compose -p loki -f {{ loki_base_dir }}/docker-compose.yml up -d
   args:
     chdir: "{{ loki_base_dir }}"
-  when: loki_status.stdout == ""
+  when: not (loki_compose_updated.changed or loki_image_pulled.changed)
 
 - name: Wait for Loki to be ready
   wait_for:

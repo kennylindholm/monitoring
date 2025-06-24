@@ -33,3 +33,10 @@ scrape_configs:
   - job_name: 'loki'
     static_configs:
       - targets: ['loki:3100']
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets:
+        - '192.168.122.42:9100'  # monitoring
+        - '192.168.122.31:9100'  # app1
+        - '192.168.122.94:9100'  # app2

@@ -1,0 +1,112 @@
+# Node Exporter configuration file
+# This file is managed by Ansible - do not edit manually
+
+# Node Exporter command line options
+# Additional arguments can be specified here
+{% if node_exporter_additional_args %}
+ARGS="{{ node_exporter_additional_args | join(' ') }}"
+{% else %}
+ARGS=""
+{% endif %}
+
+# Web interface configuration
+WEB_LISTEN_ADDRESS="{{ node_exporter_web_listen_address }}"
+WEB_TELEMETRY_PATH="{{ node_exporter_web_telemetry_path }}"
+{% if node_exporter_web_max_requests %}
+WEB_MAX_REQUESTS="{{ node_exporter_web_max_requests }}"
+{% endif %}
+
+# Logging configuration
+LOG_LEVEL="{{ node_exporter_log_level }}"
+LOG_FORMAT="{{ node_exporter_log_format }}"
+
+# Collector configuration
+{% if node_exporter_textfile_directory %}
+TEXTFILE_DIRECTORY="{{ node_exporter_textfile_directory }}"
+{% endif %}
+
+{% if node_exporter_filesystem_ignored_mount_points %}
+FILESYSTEM_IGNORED_MOUNT_POINTS="{{ node_exporter_filesystem_ignored_mount_points }}"
+{% endif %}
+
+{% if node_exporter_filesystem_ignored_fs_types %}
+FILESYSTEM_IGNORED_FS_TYPES="{{ node_exporter_filesystem_ignored_fs_types }}"
+{% endif %}
+
+{% if node_exporter_netdev_device_blacklist %}
+NETDEV_DEVICE_BLACKLIST="{{ node_exporter_netdev_device_blacklist }}"
+{% endif %}
+
+{% if node_exporter_netstat_fields %}
+NETSTAT_FIELDS="{{ node_exporter_netstat_fields }}"
+{% endif %}
+
+# Hardware monitoring
+{% if node_exporter_hwmon_chip_blacklist %}
+HWMON_CHIP_BLACKLIST="{{ node_exporter_hwmon_chip_blacklist }}"
+{% endif %}
+
+# NTP configuration
+{% if node_exporter_ntp_server %}
+NTP_SERVER="{{ node_exporter_ntp_server }}"
+NTP_PROTOCOL_VERSION="{{ node_exporter_ntp_protocol_version }}"
+{% if node_exporter_ntp_server_is_local %}
+NTP_SERVER_IS_LOCAL="true"
+{% endif %}
+NTP_IP_TTL="{{ node_exporter_ntp_ip_ttl }}"
+{% endif %}
+
+# Performance monitoring
+{% if node_exporter_perf_cpus %}
+PERF_CPUS="{{ node_exporter_perf_cpus }}"
+{% endif %}
+{% if node_exporter_perf_tracepoint %}
+PERF_TRACEPOINT="{{ node_exporter_perf_tracepoint }}"
+{% endif %}
+
+# Power supply configuration
+{% if node_exporter_powersupply_ignored_supplies %}
+POWERSUPPLY_IGNORED_SUPPLIES="{{ node_exporter_powersupply_ignored_supplies }}"
+{% endif %}
+
+# runit configuration
+{% if node_exporter_runit_servicedir %}
+RUNIT_SERVICEDIR="{{ node_exporter_runit_servicedir }}"
+{% endif %}
+
+# Supervisord configuration
+{% if node_exporter_supervisord_url %}
+SUPERVISORD_URL="{{ node_exporter_supervisord_url }}"
+{% endif %}
+
+# Thermal zone configuration
+{% if node_exporter_thermal_zone_device_blacklist %}
+THERMAL_ZONE_DEVICE_BLACKLIST="{{ node_exporter_thermal_zone_device_blacklist }}"
+{% endif %}
+
+# Enabled collectors
+ENABLED_COLLECTORS="{{ node_exporter_enabled_collectors | join(',') }}"
+
+# Disabled collectors
+{% if node_exporter_disabled_collectors %}
+DISABLED_COLLECTORS="{{ node_exporter_disabled_collectors | join(',') }}"
+{% endif %}
+
+# SystemD collector options
+{% if node_exporter_systemd_enable %}
+SYSTEMD_ENABLE="true"
+{% if node_exporter_systemd_enable_task_metrics %}
+SYSTEMD_ENABLE_TASK_METRICS="true"
+{% endif %}
+{% if node_exporter_systemd_enable_restarts_metrics %}
+SYSTEMD_ENABLE_RESTARTS_METRICS="true"
+{% endif %}
+{% if node_exporter_systemd_enable_start_time_metrics %}
+SYSTEMD_ENABLE_START_TIME_METRICS="true"
+{% endif %}
+{% endif %}
+
+# CPU collector options
+{% if node_exporter_cpu_info %}
+CPU_INFO="true"
+{% endif %}

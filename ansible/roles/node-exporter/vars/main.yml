@@ -1,14 +1,25 @@
 ---
-# Node Exporter role variables
+# Node Exporter role variables for native installation
 
-# Base directory for Node Exporter
-node_exporter_base_dir: "/opt/monitoring/node-exporter"
+# Node Exporter version and download URLs
+node_exporter_version: "1.6.1"
+node_exporter_binary_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+node_exporter_checksums_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/sha256sums.txt"
 
-# Node Exporter service configuration
+# Installation directories
+node_exporter_install_dir: "/usr/local/bin"
+node_exporter_config_dir: "/etc/node_exporter"
+node_exporter_data_dir: "/var/lib/node_exporter"
+node_exporter_log_dir: "/var/log/node_exporter"
+
+# System user and group
+node_exporter_user: "node_exporter"
+node_exporter_group: "node_exporter"
+node_exporter_shell: "/bin/false"
+node_exporter_home: "/var/lib/node_exporter"
+
+# Service configuration
 node_exporter_port: 9100
-node_exporter_image: "prom/node-exporter:v1.6.1"
-
-# Node Exporter configuration
 node_exporter_web_listen_address: "0.0.0.0:9100"
 node_exporter_web_telemetry_path: "/metrics"
 node_exporter_web_disable_exporter_metrics: false
@@ -64,47 +75,6 @@ node_exporter_textfile_directory: "/var/lib/node_exporter/textfile_collector"
 # CPU collector configuration
 node_exporter_cpu_info: true
 
-# Docker configuration
-node_exporter_container_name: "node-exporter"
-node_exporter_restart_policy: "unless-stopped"
-
-# Network settings
-node_exporter_network_name: "monitoring"
-node_exporter_network_external: true
-
-# Volumes to mount
-node_exporter_volumes:
-  - /proc:/host/proc:ro
-  - /sys:/host/sys:ro
-  - /:/rootfs:ro
-  - /etc/hostname:/etc/nodename:ro
-  - /etc/localtime:/etc/localtime:ro
-
-# Additional volumes (user-defined)
-node_exporter_additional_volumes: []
-
-# Environment variables
-node_exporter_env_vars:
-  HOST_PROC: /host/proc
-  HOST_SYS: /host/sys
-  HOST_ROOT: /rootfs
-
-# Security options
-node_exporter_security_opt: []
-
-# Container capabilities
-node_exporter_cap_add: []
-node_exporter_cap_drop: []
-
-# Health check settings
-node_exporter_healthcheck_interval: "30s"
-node_exporter_healthcheck_timeout: "10s"
-node_exporter_healthcheck_retries: 3
-node_exporter_healthcheck_start_period: "40s"
-
-# Process monitoring
-node_exporter_process_monitoring: false
-
 # SystemD collector configuration
 node_exporter_systemd_enable: true
 node_exporter_systemd_enable_task_metrics: false
@@ -139,6 +109,29 @@ node_exporter_thermal_zone_device_blacklist: ""
 # Additional command line arguments
 node_exporter_additional_args: []
 
-# User and group for file permissions
-node_exporter_user: "{{ ansible_user }}"
-node_exporter_group: "{{ ansible_user }}"
+# Service management
+node_exporter_service_enabled: true
+node_exporter_service_state: "started"
+
+# Firewall configuration
+node_exporter_firewall_enabled: true
+node_exporter_firewall_zone: "public"
+
+# Archive extraction temporary directory
+node_exporter_temp_dir: "/tmp"
+
+# Systemd service configuration
+node_exporter_systemd_after: "network.target"
+node_exporter_systemd_wants: "network.target"
+node_exporter_systemd_restart: "on-failure"
+node_exporter_systemd_restart_sec: "5"
+
+# Process limits
+node_exporter_limit_nofile: 65536
+node_exporter_limit_nproc: 65536
+
+# Security settings
+node_exporter_no_new_privileges: true
+node_exporter_protect_home: true
+node_exporter_protect_system: "strict"
+node_exporter_private_tmp: true

@@ -1,41 +1,33 @@
 ---
-- name: Install Docker prerequisites
+- name: Install common monitoring prerequisites
+  package:
+    name:
+      - curl
+      - wget
+      - gnupg
+      - ca-certificates
+      - openssl
+      - tar
+      - gzip
+      - systemd
+    state: present
+
+- name: Install additional packages for Debian
   package:
     name:
       - apt-transport-https
-      - ca-certificates
-      - curl
-      - gnupg
       - lsb-release
-      - python3-pip
-      - python3-docker
+      - software-properties-common
     state: present
   when: ansible_os_family == "Debian"
-
-- name: Ensure Docker is installed and running
-  service:
-    name: docker
-    state: started
-    enabled: yes
-  when: not ansible_check_mode
 
 - name: Create monitoring base directory
   file:
     path: "{{ monitoring_base_dir }}"
     state: directory
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+    owner: root
+    group: root
     mode: "0755"
-
-- name: Create monitoring network
-  docker_network:
-    name: "{{ monitoring_network_name }}"
-    driver: bridge
-    ipam_config:
-      - subnet: "{{ monitoring_network_subnet }}"
-        gateway: "{{ monitoring_network_gateway }}"
-    state: present
-  when: monitoring_create_network and not ansible_check_mode
 
 - name: Create monitoring user
   user:
@@ -46,6 +38,28 @@
     createhome: no
     state: present
   when: monitoring_create_user
+
+- name: Create monitoring group
+  group:
+    name: "{{ monitoring_user }}"
+    system: yes
+    state: present
+  when: monitoring_create_user
+
+- name: Create monitoring subdirectories
+  file:
+    path: "{{ monitoring_base_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ monitoring_user if monitoring_create_user else 'root' }}"
+    group: "{{ monitoring_user if monitoring_create_user else 'root' }}"
+    mode: "0755"
+  loop:
+    - config
+    - data
+    - logs
+    - scripts
+    - ssl
+    - backups
 
 - name: Set up log rotation for monitoring services
   template:
@@ -60,26 +74,27 @@
   file:
     path: "{{ monitoring_backup_dir }}"
     state: directory
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
     mode: "0755"
   when: monitoring_enable_backup
 
 - name: Install monitoring backup script
   template:
     src: backup-monitoring.sh.j2
-    dest: "{{ monitoring_base_dir }}/backup-monitoring.sh"
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+    dest: "{{ monitoring_base_dir }}/scripts/backup-monitoring.sh"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
     mode: "0755"
   when: monitoring_enable_backup
 
 - name: Set up monitoring backup cron job
   cron:
     name: "Monitoring stack backup"
-    job: "{{ monitoring_base_dir }}/backup-monitoring.sh"
+    job: "{{ monitoring_base_dir }}/scripts/backup-monitoring.sh"
     hour: "{{ monitoring_backup_hour }}"
     minute: "{{ monitoring_backup_minute }}"
+    user: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
     state: present
   when: monitoring_enable_backup and not ansible_check_mode
 
@@ -87,8 +102,8 @@
   file:
     path: "{{ monitoring_ssl_dir }}"
     state: directory
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
     mode: "0755"
   when: monitoring_ssl_enabled
 
@@ -105,8 +120,8 @@
 - name: Set permissions on SSL files
   file:
     path: "{{ item }}"
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
     mode: "0644"
   loop:
     - "{{ monitoring_ssl_dir }}/monitoring.crt"
@@ -117,16 +132,16 @@
   file:
     path: "{{ monitoring_scripts_dir }}"
     state: directory
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
     mode: "0755"
 
 - name: Install monitoring helper scripts
   template:
     src: "{{ item }}.j2"
     dest: "{{ monitoring_scripts_dir }}/{{ item }}"
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
     mode: "0755"
   loop:
     - check-services.sh
@@ -135,15 +150,114 @@
   template:
     src: README.md.j2
     dest: "{{ monitoring_base_dir }}/README.md"
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
     mode: "0644"
   when: false # Template doesn't exist yet
 
-- name: Set up firewall rules for monitoring services
+- name: Configure firewall for monitoring services (firewalld)
+  firewalld:
+    port: "{{ item }}/tcp"
+    permanent: yes
+    state: enabled
+    zone: public
+    immediate: yes
+  loop: "{{ monitoring_firewall_ports }}"
+  when:
+    - monitoring_configure_firewall
+    - ansible_os_family == "RedHat"
+  ignore_errors: yes
+
+- name: Configure firewall for monitoring services (ufw)
   ufw:
     rule: allow
     port: "{{ item }}"
     proto: tcp
   loop: "{{ monitoring_firewall_ports }}"
-  when: monitoring_configure_firewall and ansible_os_family == "Debian"
+  when:
+    - monitoring_configure_firewall
+    - ansible_os_family == "Debian"
+  ignore_errors: yes
+
+- name: Set system resource limits for monitoring
+  pam_limits:
+    domain: "{{ monitoring_user if monitoring_create_user else '*' }}"
+    limit_type: "{{ item.type }}"
+    limit_item: "{{ item.item }}"
+    value: "{{ item.value }}"
+  loop:
+    - { type: "soft", item: "nofile", value: "{{ monitoring_max_open_files }}" }
+    - { type: "hard", item: "nofile", value: "{{ monitoring_max_open_files }}" }
+    - { type: "soft", item: "nproc", value: "{{ monitoring_max_processes }}" }
+    - { type: "hard", item: "nproc", value: "{{ monitoring_max_processes }}" }
+  when: monitoring_enable_performance_tuning
+
+- name: Configure sysctl for monitoring performance
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { name: "fs.file-max", value: "{{ monitoring_max_open_files * 2 }}" }
+    - { name: "net.core.somaxconn", value: "1024" }
+    - { name: "net.ipv4.tcp_max_syn_backlog", value: "1024" }
+    - { name: "vm.max_map_count", value: "262144" }
+  when: monitoring_enable_performance_tuning
+  ignore_errors: yes
+
+- name: Create systemd drop-in directory for monitoring services
+  file:
+    path: "/etc/systemd/system/{{ item }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - node_exporter
+    - prometheus
+    - grafana-server
+    - alertmanager
+  when: monitoring_enable_systemd_hardening
+
+- name: Install systemd security hardening for monitoring services
+  template:
+    src: systemd-security.conf.j2
+    dest: "/etc/systemd/system/{{ item }}.service.d/security.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    service_name: "{{ item }}"
+  loop:
+    - node_exporter
+    - prometheus
+    - grafana-server
+    - alertmanager
+  when: monitoring_enable_systemd_hardening
+  notify: reload systemd
+
+- name: Install monitoring health check script
+  template:
+    src: health-check.sh.j2
+    dest: "{{ monitoring_scripts_dir }}/health-check.sh"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    mode: "0755"
+
+- name: Set up monitoring health check cron job
+  cron:
+    name: "Monitoring health check"
+    job: "{{ monitoring_scripts_dir }}/health-check.sh"
+    minute: "*/5"
+    user: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    state: present
+  when: monitoring_healthcheck_enabled and not ansible_check_mode
+
+- name: Create monitoring service status script
+  template:
+    src: service-status.sh.j2
+    dest: "{{ monitoring_scripts_dir }}/service-status.sh"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    mode: "0755"

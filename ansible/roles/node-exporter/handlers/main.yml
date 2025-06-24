@@ -1,18 +1,34 @@
 ---
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
 - name: restart node-exporter
-  command: docker compose -p node-exporter -f {{ node_exporter_base_dir }}/docker-compose.yml restart
-  args:
-    chdir: "{{ node_exporter_base_dir }}"
+  systemd:
+    name: node_exporter
+    state: restarted
   when: not ansible_check_mode
 
 - name: stop node-exporter
-  command: docker compose -p node-exporter -f {{ node_exporter_base_dir }}/docker-compose.yml down
-  args:
-    chdir: "{{ node_exporter_base_dir }}"
+  systemd:
+    name: node_exporter
+    state: stopped
   when: not ansible_check_mode
 
 - name: start node-exporter
-  command: docker compose -p node-exporter -f {{ node_exporter_base_dir }}/docker-compose.yml up -d
-  args:
-    chdir: "{{ node_exporter_base_dir }}"
+  systemd:
+    name: node_exporter
+    state: started
+  when: not ansible_check_mode
+
+- name: enable node-exporter
+  systemd:
+    name: node_exporter
+    enabled: yes
+  when: not ansible_check_mode
+
+- name: disable node-exporter
+  systemd:
+    name: node_exporter
+    enabled: no
   when: not ansible_check_mode

@@ -1,56 +1,183 @@
 ---
-- name: Create Node Exporter directories
+- name: Create node_exporter system group
+  group:
+    name: "{{ node_exporter_group }}"
+    system: yes
+    state: present
+
+- name: Create node_exporter system user
+  user:
+    name: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    system: yes
+    shell: "{{ node_exporter_shell }}"
+    home: "{{ node_exporter_home }}"
+    createhome: no
+    state: present
+
+- name: Create node_exporter directories
   file:
-    path: "{{ node_exporter_base_dir }}"
+    path: "{{ item }}"
     state: directory
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+    owner: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
     mode: "0755"
+  loop:
+    - "{{ node_exporter_config_dir }}"
+    - "{{ node_exporter_data_dir }}"
+    - "{{ node_exporter_log_dir }}"
+    - "{{ node_exporter_textfile_directory }}"
 
-- name: Copy Docker Compose file for Node Exporter
-  template:
-    src: docker-compose.yml.j2
-    dest: "{{ node_exporter_base_dir }}/docker-compose.yml"
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
+- name: Check if node_exporter binary exists
+  stat:
+    path: "{{ node_exporter_install_dir }}/node_exporter"
+  register: node_exporter_binary_check
+
+- name: Get installed node_exporter version
+  command: "{{ node_exporter_install_dir }}/node_exporter --version"
+  register: node_exporter_current_version
+  failed_when: false
+  changed_when: false
+  when: node_exporter_binary_check.stat.exists
+
+- name: Set node_exporter version facts
+  set_fact:
+    node_exporter_installed_version: "{{ node_exporter_current_version.stdout_lines[0].split()[2] if node_exporter_current_version.stdout_lines is defined else 'none' }}"
+    node_exporter_needs_update: "{{ not node_exporter_binary_check.stat.exists or (node_exporter_current_version.stdout_lines is defined and node_exporter_version not in node_exporter_current_version.stdout_lines[0]) }}"
+
+- name: Download node_exporter checksums
+  get_url:
+    url: "{{ node_exporter_checksums_url }}"
+    dest: "{{ node_exporter_temp_dir }}/node_exporter_checksums.txt"
     mode: "0644"
-  register: node_exporter_compose_updated
+    force: yes
+  register: node_exporter_checksums_download
+  when: node_exporter_needs_update
+
+- name: Read node_exporter checksums file
+  slurp:
+    src: "{{ node_exporter_temp_dir }}/node_exporter_checksums.txt"
+  register: node_exporter_checksums_response
+  when: node_exporter_needs_update
+
+- name: Extract node_exporter checksum
+  set_fact:
+    node_exporter_checksum: "{{ item.split()[0] }}"
+  loop: "{{ (node_exporter_checksums_response.content | b64decode).split('\n') }}"
+  when:
+    - node_exporter_needs_update
+    - node_exporter_checksums_response is defined
+    - node_exporter_checksums_response.content is defined
+    - "'node_exporter-' + node_exporter_version + '.linux-amd64.tar.gz' in item"
+
+- name: Download node_exporter binary archive
+  get_url:
+    url: "{{ node_exporter_binary_url }}"
+    dest: "{{ node_exporter_temp_dir }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    checksum: "sha256:{{ node_exporter_checksum }}"
+    mode: "0644"
+  register: node_exporter_download
+  when: node_exporter_needs_update
+
+- name: Extract node_exporter binary archive
+  unarchive:
+    src: "{{ node_exporter_temp_dir }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    dest: "{{ node_exporter_temp_dir }}"
+    remote_src: yes
+    creates: "{{ node_exporter_temp_dir }}/node_exporter-{{ node_exporter_version }}.linux-amd64"
+  when: node_exporter_needs_update
+
+- name: Install node_exporter binary
+  copy:
+    src: "{{ node_exporter_temp_dir }}/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+    dest: "{{ node_exporter_install_dir }}/node_exporter"
+    remote_src: yes
+    owner: root
+    group: root
+    mode: "0755"
   notify: restart node-exporter
+  when: node_exporter_needs_update
 
-- name: Pull latest Node Exporter image
-  command: docker compose -p node-exporter -f {{ node_exporter_base_dir }}/docker-compose.yml pull
-  args:
-    chdir: "{{ node_exporter_base_dir }}"
-  register: node_exporter_image_pulled
-  changed_when: "'Downloaded newer image' in node_exporter_image_pulled.stderr or 'Pulled' in node_exporter_image_pulled.stderr"
-  when: not ansible_check_mode
+- name: Create node_exporter systemd service file
+  template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart node-exporter
 
-- name: Deploy/Update Node Exporter container
-  command: docker compose -p node-exporter -f {{ node_exporter_base_dir }}/docker-compose.yml up -d --force-recreate
-  args:
-    chdir: "{{ node_exporter_base_dir }}"
+- name: Create node_exporter sysconfig file
+  template:
+    src: node_exporter.j2
+    dest: /etc/sysconfig/node_exporter
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart node-exporter
+  when: ansible_os_family == "RedHat"
+
+- name: Create node_exporter default file
+  template:
+    src: node_exporter.j2
+    dest: /etc/default/node_exporter
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart node-exporter
+  when: ansible_os_family == "Debian"
+
+- name: Enable and start node_exporter service
+  systemd:
+    name: node_exporter
+    enabled: "{{ node_exporter_service_enabled }}"
+    state: "{{ node_exporter_service_state }}"
+    daemon_reload: yes
+
+- name: Configure firewall for node_exporter (firewalld)
+  firewalld:
+    port: "{{ node_exporter_port }}/tcp"
+    permanent: yes
+    state: enabled
+    zone: "{{ node_exporter_firewall_zone }}"
+    immediate: yes
   when:
-    - not ansible_check_mode
-    - node_exporter_compose_updated.changed or node_exporter_image_pulled.changed
-  register: node_exporter_deployed
+    - node_exporter_firewall_enabled
+    - ansible_facts['os_family'] == "RedHat"
+    - ansible_facts['pkg_mgr'] == "dnf" or ansible_facts['pkg_mgr'] == "yum"
+  ignore_errors: yes
 
-- name: Start Node Exporter if not running
-  command: docker compose -p node-exporter -f {{ node_exporter_base_dir }}/docker-compose.yml up -d
-  args:
-    chdir: "{{ node_exporter_base_dir }}"
+- name: Configure firewall for node_exporter (ufw)
+  ufw:
+    rule: allow
+    port: "{{ node_exporter_port }}"
+    proto: tcp
   when:
-    - not ansible_check_mode
-    - not (node_exporter_compose_updated.changed or node_exporter_image_pulled.changed)
+    - node_exporter_firewall_enabled
+    - ansible_facts['os_family'] == "Debian"
+  ignore_errors: yes
 
-- name: Wait for Node Exporter to be ready
+- name: Clean up downloaded files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ node_exporter_temp_dir }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    - "{{ node_exporter_temp_dir }}/node_exporter-{{ node_exporter_version }}.linux-amd64"
+    - "{{ node_exporter_temp_dir }}/node_exporter_checksums.txt"
+  when: node_exporter_needs_update
+
+- name: Wait for node_exporter to be ready
   wait_for:
     port: "{{ node_exporter_port }}"
     host: localhost
-    delay: 10
-    timeout: 120
+    delay: 5
+    timeout: 60
   when: not ansible_check_mode
 
-- name: Verify Node Exporter is running
+- name: Verify node_exporter is responding
   uri:
     url: "http://localhost:{{ node_exporter_port }}/metrics"
     method: GET
@@ -61,7 +188,7 @@
   delay: 10
   when: not ansible_check_mode
 
-- name: Check Node Exporter metrics endpoint
+- name: Check node_exporter metrics endpoint
   uri:
     url: "http://localhost:{{ node_exporter_port }}/metrics"
     method: GET
@@ -80,13 +207,23 @@
     success_msg: "Node Exporter is collecting system metrics successfully"
   when: node_exporter_metrics is defined and node_exporter_metrics.content is defined
 
-- name: Display Node Exporter URL
+- name: Display node_exporter service status
   debug:
     msg: |
-      Node Exporter deployed successfully!
+      Node Exporter installed successfully!
 
-      Service is available at:
+      Service Information:
+      - Status: {{ node_exporter_service_state }}
+      - Version: {{ node_exporter_version }}
+      - Binary location: {{ node_exporter_install_dir }}/node_exporter
+      - Service file: /etc/systemd/system/node_exporter.service
+      - Data directory: {{ node_exporter_data_dir }}
+      - Log directory: {{ node_exporter_log_dir }}
+      - Textfile collector: {{ node_exporter_textfile_directory }}
+
+      Access Information:
       - Metrics endpoint: http://{{ ansible_default_ipv4.address }}:{{ node_exporter_port }}/metrics
+      - Listen address: {{ node_exporter_web_listen_address }}
 
       Key metrics being collected:
       - CPU usage (node_cpu_seconds_total)
@@ -95,6 +232,11 @@
       - Network I/O (node_network_*)
       - Load average (node_load*)
       - System uptime (node_boot_time_seconds)
+
+      Management commands:
+      - Check status: sudo systemctl status node_exporter
+      - View logs: sudo journalctl -u node_exporter -f
+      - Restart service: sudo systemctl restart node_exporter
 
       To add this to Prometheus, use the following scrape config:
         - job_name: 'node-exporter'

@@ -7,7 +7,6 @@
   vars:
     # Override default variables as needed
     monitoring_base_dir: /opt/monitoring
-    monitoring_network_name: monitoring
 
     # Node Exporter specific configuration
     node_exporter_port: 9100
@@ -53,30 +52,17 @@
         cache_valid_time: 3600
       when: ansible_os_family == "Debian"
 
-    - name: Check if Docker is installed
-      command: docker --version
-      register: docker_check
-      failed_when: false
-      changed_when: false
-
-    - name: Fail if Docker is not installed
-      fail:
-        msg: "Docker is not installed. Please run the docker installation playbook first."
-      when: docker_check.rc != 0
-
-    - name: Check if monitoring network exists
-      command: docker network inspect {{ monitoring_network_name }}
-      register: network_check
-      failed_when: false
-      changed_when: false
-
-    - name: Create monitoring network if it doesn't exist
-      command: docker network create {{ monitoring_network_name }}
-      when: network_check.rc != 0
+    - name: Ensure system is updated (RHEL/CentOS)
+      yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
 
   roles:
-    # Deploy common prerequisites first
+    # Deploy common prerequisites first (Docker-free version)
     - role: monitoring-common
+      vars:
+        monitoring_docker_enabled: false
+        monitoring_create_network: false
       tags: [common, always]
 
     # Deploy Node Exporter
@@ -103,7 +89,7 @@
         msg: |
           Node Exporter metrics sample:
           {{ node_exporter_check.content.split('\n')[:10] | join('\n') }}
-      when: node_exporter_check is succeeded
+      when: node_exporter_check is succeeded and node_exporter_check.content is defined
 
     - name: Create Node Exporter summary file
       template:
@@ -134,10 +120,10 @@
           Configuration files: {{ monitoring_base_dir }}/node-exporter
 
           To check service status:
-          docker ps --filter name=node-exporter
+          sudo systemctl status node_exporter
 
           To view logs:
-          docker logs node-exporter
+          sudo journalctl -u node_exporter -f
 
           To add to Prometheus scrape config:
           - job_name: 'node-exporter'
@@ -147,29 +133,19 @@
           ============================================
 
 - name: Configure Node Exporter
-  hosts: monitoring_servers
+  hosts: client_hosts
   become: true
   gather_facts: false
   tags: [configure, never]
 
   tasks:
-    - name: Enable additional collectors
-      lineinfile:
-        path: "{{ monitoring_base_dir }}/node-exporter/docker-compose.yml"
-        line: "      - '--collector.{{ item }}'"
-        insertafter: "    command:"
-        state: present
-      loop:
-        - systemd
-        - processes
-        - interrupts
-      notify: restart node-exporter
-
     - name: Configure textfile collector directory
       file:
         path: "{{ node_exporter_textfile_directory | default('/var/lib/node_exporter/textfile_collector') }}"
         state: directory
         mode: "0755"
+        owner: node_exporter
+        group: node_exporter
       when: node_exporter_textfile_directory is defined
 
     - name: Add custom metrics collection script
@@ -182,6 +158,8 @@
           echo "custom_script_last_run_timestamp $(date +%s)"
         dest: "{{ node_exporter_textfile_directory | default('/var/lib/node_exporter/textfile_collector') }}/custom_metrics.sh"
         mode: "0755"
+        owner: node_exporter
+        group: node_exporter
       when: node_exporter_textfile_directory is defined
 
     - name: Set up cron job for custom metrics
@@ -189,13 +167,29 @@
         name: "Node Exporter custom metrics"
         minute: "*/5"
         job: "{{ node_exporter_textfile_directory | default('/var/lib/node_exporter/textfile_collector') }}/custom_metrics.sh > {{ node_exporter_textfile_directory | default('/var/lib/node_exporter/textfile_collector') }}/custom_metrics.prom"
+        user: node_exporter
       when: node_exporter_textfile_directory is defined
 
+    - name: Enable additional collectors (systemd)
+      lineinfile:
+        path: /etc/systemd/system/node_exporter.service
+        regexp: "^ExecStart=.*"
+        line: "ExecStart=/usr/local/bin/node_exporter {{ node_exporter_systemd_args | default('') }} --collector.systemd --collector.processes --collector.interrupts"
+        backup: yes
+      notify:
+        - reload systemd
+        - restart node-exporter
+      when: ansible_service_mgr == "systemd"
+
   handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
     - name: restart node-exporter
-      command: docker compose -p node-exporter -f {{ monitoring_base_dir }}/node-exporter/docker-compose.yml restart
-      args:
-        chdir: "{{ monitoring_base_dir }}/node-exporter"
+      systemd:
+        name: node_exporter
+        state: restarted
 # Usage examples:
 # Deploy Node Exporter:
 # ansible-playbook -i inventory deploy-node-exporter.yml
@@ -204,7 +198,7 @@
 # ansible-playbook -i inventory deploy-node-exporter.yml --tags configure
 #
 # Deploy to specific hosts:
-# ansible-playbook -i inventory deploy-node-exporter.yml --limit monitoring_servers
+# ansible-playbook -i inventory deploy-node-exporter.yml --limit client_hosts
 #
 # Check deployment status:
 # ansible-playbook -i inventory deploy-node-exporter.yml --tags never --check

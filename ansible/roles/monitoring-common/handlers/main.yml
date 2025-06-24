@@ -1,0 +1,75 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: restart monitoring services
+  systemd:
+    name: "{{ item }}"
+    state: restarted
+  loop:
+    - node_exporter
+    - prometheus
+    - grafana-server
+    - alertmanager
+    - loki
+    - promtail
+  ignore_errors: yes
+  when: not ansible_check_mode
+
+- name: reload firewalld
+  systemd:
+    name: firewalld
+    state: reloaded
+  when:
+    - ansible_os_family == "RedHat"
+    - not ansible_check_mode
+  ignore_errors: yes
+
+- name: reload ufw
+  ufw:
+    state: reloaded
+  when:
+    - ansible_os_family == "Debian"
+    - not ansible_check_mode
+  ignore_errors: yes
+
+- name: restart rsyslog
+  systemd:
+    name: rsyslog
+    state: restarted
+  when: not ansible_check_mode
+  ignore_errors: yes
+
+- name: restart logrotate
+  command: logrotate -f /etc/logrotate.d/monitoring
+  when: not ansible_check_mode
+  ignore_errors: yes
+
+- name: update monitoring scripts permissions
+  file:
+    path: "{{ monitoring_scripts_dir }}"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    mode: "0755"
+    recurse: yes
+  when: not ansible_check_mode
+
+- name: reload sysctl
+  command: sysctl -p
+  when: not ansible_check_mode
+  ignore_errors: yes
+
+- name: update ca certificates
+  command: update-ca-certificates
+  when:
+    - ansible_os_family == "Debian"
+    - not ansible_check_mode
+  ignore_errors: yes
+
+- name: update ca trust
+  command: update-ca-trust
+  when:
+    - ansible_os_family == "RedHat"
+    - not ansible_check_mode
+  ignore_errors: yes

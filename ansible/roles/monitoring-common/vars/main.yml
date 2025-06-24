@@ -1,18 +1,16 @@
 ---
 # Common monitoring variables shared across all monitoring roles
+# Updated for native service installations (no Docker dependencies)
+
+# Docker control (set to false for native installations)
+monitoring_docker_enabled: false
 
 # Base directory for all monitoring services
 monitoring_base_dir: "/opt/monitoring"
 
-# Monitoring network configuration
-monitoring_network_name: "monitoring"
-monitoring_create_network: true
-monitoring_network_subnet: "172.20.0.0/16"
-monitoring_network_gateway: "172.20.0.1"
-
 # Common user for monitoring services
 monitoring_user: "monitoring"
-monitoring_create_user: false
+monitoring_create_user: true
 
 # Domain configuration
 monitoring_domain: "{{ ansible_default_ipv4.address }}"
@@ -42,13 +40,13 @@ monitoring_scripts_dir: "{{ monitoring_base_dir }}/scripts"
 # Firewall configuration
 monitoring_configure_firewall: false
 monitoring_firewall_ports:
-  - "9090"  # Prometheus
-  - "3000"  # Grafana
-  - "3100"  # Loki
-  - "9093"  # Alertmanager
-  - "9100"  # Node Exporter
-  - "8080"  # cAdvisor
-  - "9080"  # Promtail
+  - "9090" # Prometheus
+  - "3000" # Grafana
+  - "3100" # Loki
+  - "9093" # Alertmanager
+  - "9100" # Node Exporter
+  - "8080" # cAdvisor
+  - "9080" # Promtail
 
 # Default resource limits
 monitoring_default_memory_limit: "512M"
@@ -85,6 +83,9 @@ monitoring_oauth_provider: ""
 monitoring_oauth_client_id: ""
 monitoring_oauth_client_secret: ""
 
+# SystemD security hardening
+monitoring_enable_systemd_hardening: true
+
 # Notification settings
 monitoring_notification_email: ""
 monitoring_notification_slack_webhook: ""
@@ -92,17 +93,12 @@ monitoring_notification_pagerduty_key: ""
 
 # Update settings
 monitoring_auto_update: false
-monitoring_update_schedule: "0 4 * * 0"  # Weekly on Sunday at 4 AM
-
-# Docker registry settings
-monitoring_docker_registry: ""
-monitoring_docker_registry_username: ""
-monitoring_docker_registry_password: ""
+monitoring_update_schedule: "0 4 * * 0" # Weekly on Sunday at 4 AM
 
 # Proxy settings
 monitoring_http_proxy: ""
 monitoring_https_proxy: ""
-monitoring_no_proxy: "localhost,127.0.0.1,{{ monitoring_network_subnet }}"
+monitoring_no_proxy: "localhost,127.0.0.1"
 
 # DNS settings
 monitoring_dns_servers: []
@@ -135,3 +131,54 @@ monitoring_service_start_timeout: 300
 # Maintenance mode
 monitoring_maintenance_mode: false
 monitoring_maintenance_message: "Monitoring stack is under maintenance"
+
+# Native service configuration
+monitoring_services_config_dir: "{{ monitoring_base_dir }}/config"
+monitoring_services_data_dir: "{{ monitoring_base_dir }}/data"
+monitoring_services_log_dir: "{{ monitoring_base_dir }}/logs"
+
+# Binary installation settings
+monitoring_temp_dir: "/tmp"
+monitoring_install_dir: "/usr/local/bin"
+
+# System service configuration
+monitoring_systemd_restart_policy: "on-failure"
+monitoring_systemd_restart_delay: "5s"
+
+# File permissions
+monitoring_file_mode: "0644"
+monitoring_exec_mode: "0755"
+monitoring_dir_mode: "0755"
+
+# Logging configuration
+monitoring_log_format: "json"
+monitoring_log_level: "info"
+monitoring_syslog_enabled: true
+monitoring_journal_enabled: true
+
+# Network configuration
+monitoring_bind_address: "0.0.0.0"
+monitoring_enable_ipv6: false
+
+# Monitoring services list (for scripts and automation)
+monitoring_services:
+  - name: "node_exporter"
+    port: 9100
+    path: "/metrics"
+  - name: "prometheus"
+    port: 9090
+    path: "/api/v1/status"
+  - name: "grafana-server"
+    port: 3000
+    path: "/api/health"
+  - name: "alertmanager"
+    port: 9093
+    path: "/api/v1/status"
+
+# Archive extraction settings
+monitoring_archive_timeout: 300
+monitoring_checksum_verify: true
+
+# Update and maintenance
+monitoring_config_backup_enabled: true
+monitoring_config_backup_dir: "{{ monitoring_backup_dir }}/configs"

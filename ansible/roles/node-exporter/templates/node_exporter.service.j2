@@ -1,0 +1,145 @@
+[Unit]
+Description=Prometheus Node Exporter
+Documentation=https://prometheus.io/docs/guides/node-exporter/
+Wants={{ node_exporter_systemd_wants }}
+After={{ node_exporter_systemd_after }}
+
+[Service]
+Type=simple
+User={{ node_exporter_user }}
+Group={{ node_exporter_group }}
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStart={{ node_exporter_install_dir }}/node_exporter \
+{% if node_exporter_web_listen_address %}
+    --web.listen-address={{ node_exporter_web_listen_address }} \
+{% endif %}
+{% if node_exporter_web_telemetry_path %}
+    --web.telemetry-path={{ node_exporter_web_telemetry_path }} \
+{% endif %}
+{% if node_exporter_web_disable_exporter_metrics %}
+    --web.disable-exporter-metrics \
+{% endif %}
+{% if node_exporter_web_max_requests %}
+    --web.max-requests={{ node_exporter_web_max_requests }} \
+{% endif %}
+{% if node_exporter_log_level %}
+    --log.level={{ node_exporter_log_level }} \
+{% endif %}
+{% if node_exporter_log_format %}
+    --log.format={{ node_exporter_log_format }} \
+{% endif %}
+{% if node_exporter_enabled_collectors %}
+{% for collector in node_exporter_enabled_collectors %}
+    --collector.{{ collector }} \
+{% endfor %}
+{% endif %}
+{% if node_exporter_disabled_collectors %}
+{% for collector in node_exporter_disabled_collectors %}
+    --no-collector.{{ collector }} \
+{% endfor %}
+{% endif %}
+{% if node_exporter_filesystem_ignored_mount_points %}
+    --collector.filesystem.mount-points-exclude="{{ node_exporter_filesystem_ignored_mount_points }}" \
+{% endif %}
+{% if node_exporter_filesystem_ignored_fs_types %}
+    --collector.filesystem.fs-types-exclude="{{ node_exporter_filesystem_ignored_fs_types }}" \
+{% endif %}
+{% if node_exporter_netdev_device_blacklist %}
+    --collector.netdev.device-blacklist="{{ node_exporter_netdev_device_blacklist }}" \
+{% endif %}
+{% if node_exporter_netstat_fields %}
+    --collector.netstat.fields="{{ node_exporter_netstat_fields }}" \
+{% endif %}
+{% if node_exporter_textfile_directory %}
+    --collector.textfile.directory={{ node_exporter_textfile_directory }} \
+{% endif %}
+{% if node_exporter_cpu_info %}
+    --collector.cpu.info \
+{% endif %}
+{% if node_exporter_systemd_enable %}
+    --collector.systemd \
+{% endif %}
+{% if node_exporter_systemd_enable_task_metrics %}
+    --collector.systemd.enable-task-metrics \
+{% endif %}
+{% if node_exporter_systemd_enable_restarts_metrics %}
+    --collector.systemd.enable-restarts-metrics \
+{% endif %}
+{% if node_exporter_systemd_enable_start_time_metrics %}
+    --collector.systemd.enable-start-time-metrics \
+{% endif %}
+{% if node_exporter_hwmon_chip_blacklist %}
+    --collector.hwmon.chip-blacklist="{{ node_exporter_hwmon_chip_blacklist }}" \
+{% endif %}
+{% if node_exporter_ntp_server %}
+    --collector.ntp.server={{ node_exporter_ntp_server }} \
+{% endif %}
+{% if node_exporter_ntp_protocol_version %}
+    --collector.ntp.protocol-version={{ node_exporter_ntp_protocol_version }} \
+{% endif %}
+{% if node_exporter_ntp_server_is_local %}
+    --collector.ntp.server-is-local \
+{% endif %}
+{% if node_exporter_ntp_ip_ttl %}
+    --collector.ntp.ip-ttl={{ node_exporter_ntp_ip_ttl }} \
+{% endif %}
+{% if node_exporter_supervisord_url %}
+    --collector.supervisord.url={{ node_exporter_supervisord_url }} \
+{% endif %}
+{% if node_exporter_perf_cpus %}
+    --collector.perf.cpus={{ node_exporter_perf_cpus }} \
+{% endif %}
+{% if node_exporter_perf_tracepoint %}
+    --collector.perf.tracepoint={{ node_exporter_perf_tracepoint }} \
+{% endif %}
+{% if node_exporter_powersupply_ignored_supplies %}
+    --collector.powersupply.ignored-supplies="{{ node_exporter_powersupply_ignored_supplies }}" \
+{% endif %}
+{% if node_exporter_runit_servicedir %}
+    --collector.runit.servicedir={{ node_exporter_runit_servicedir }} \
+{% endif %}
+{% if node_exporter_thermal_zone_device_blacklist %}
+    --collector.thermal_zone.device-blacklist="{{ node_exporter_thermal_zone_device_blacklist }}" \
+{% endif %}
+{% for arg in node_exporter_additional_args %}
+    {{ arg }} \
+{% endfor %}
+
+SyslogIdentifier=node_exporter
+Restart={{ node_exporter_systemd_restart }}
+RestartSec={{ node_exporter_systemd_restart_sec }}
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges={{ node_exporter_no_new_privileges | lower }}
+{% if node_exporter_protect_home %}
+ProtectHome={{ node_exporter_protect_home | lower }}
+{% endif %}
+{% if node_exporter_protect_system %}
+ProtectSystem={{ node_exporter_protect_system }}
+{% endif %}
+{% if node_exporter_private_tmp %}
+PrivateTmp={{ node_exporter_private_tmp | lower }}
+{% endif %}
+
+# Resource limits
+{% if node_exporter_limit_nofile %}
+LimitNOFILE={{ node_exporter_limit_nofile }}
+{% endif %}
+{% if node_exporter_limit_nproc %}
+LimitNPROC={{ node_exporter_limit_nproc }}
+{% endif %}
+
+# Working directory
+WorkingDirectory={{ node_exporter_data_dir }}
+
+# Environment file
+{% if ansible_os_family == "RedHat" %}
+EnvironmentFile=-/etc/sysconfig/node_exporter
+{% elif ansible_os_family == "Debian" %}
+EnvironmentFile=-/etc/default/node_exporter
+{% endif %}
+
+[Install]
+WantedBy=multi-user.target

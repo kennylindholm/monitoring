@@ -180,7 +180,7 @@
     - { name: "net.ipv4.tcp_max_syn_backlog", value: "1024" }
     - { name: "vm.max_map_count", value: "262144" }
   when: monitoring_enable_performance_tuning
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Create systemd drop-in directory for monitoring services
   file:

@@ -99,6 +99,18 @@
       vars:
         deployment_date: "{{ ansible_date_time.iso8601 }}"
 
+    - name: Restart Node Exporter service
+      systemd:
+        name: node_exporter
+        state: restarted
+        daemon_reload: yes
+      register: node_exporter_restart_result
+      failed_when: false
+
+    - name: Display restart status
+      debug:
+        msg: "Node Exporter service restart: {{ 'SUCCESS' if node_exporter_restart_result.changed else 'FAILED' }}"
+
     - name: Display access information
       debug:
         msg: |
@@ -118,17 +130,6 @@
           - System uptime: node_boot_time_seconds
 
           Configuration files: {{ monitoring_base_dir }}/node-exporter
-
-          To check service status:
-          sudo systemctl status node_exporter
-
-          To view logs:
-          sudo journalctl -u node_exporter -f
-
-          To add to Prometheus scrape config:
-          - job_name: 'node-exporter'
-            static_configs:
-              - targets: ['{{ ansible_default_ipv4.address }}:{{ node_exporter_port }}']
 
           ============================================
 

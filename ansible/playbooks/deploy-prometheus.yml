@@ -136,6 +136,21 @@
       vars:
         deployment_date: "{{ ansible_date_time.iso8601 }}"
 
+    - name: Reload Prometheus configuration
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/-/reload"
+        method: POST
+        status_code: 200
+        timeout: 30
+      register: prometheus_reload_result
+      retries: 3
+      delay: 5
+      failed_when: false
+
+    - name: Display reload status
+      debug:
+        msg: "Prometheus configuration reload: {{ 'SUCCESS' if prometheus_reload_result.status == 200 else 'FAILED' }}"
+
     - name: Display access information
       debug:
         msg: |
@@ -155,26 +170,7 @@
           - Storage Path: {{ prometheus_storage_path }}
           - Configuration Path: {{ prometheus_config_path }}
 
-          Key Features:
-          - Time-series database for metrics
-          - PromQL query language
-          - Built-in alerting (requires Alertmanager)
-          - Service discovery support
-          - HTTP API for integrations
-
           Configuration files: {{ monitoring_base_dir }}/prometheus
-
-          To check service status:
-          docker ps --filter name=prometheus
-
-          To view logs:
-          docker logs prometheus
-
-          To reload configuration:
-          curl -X POST http://localhost:{{ prometheus_port }}/-/reload
-
-          To add scrape targets, edit:
-          {{ prometheus_config_path }}/prometheus.yml
 
           ============================================
 

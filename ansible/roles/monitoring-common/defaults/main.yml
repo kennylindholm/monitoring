@@ -25,17 +25,6 @@ monitoring_domain: localhost
 # Scripts configuration
 monitoring_scripts_dir: "{{ monitoring_base_dir }}/scripts"
 
-# Firewall configuration
-monitoring_configure_firewall: false
-monitoring_firewall_ports:
-  - 9090  # Prometheus
-  - 3000  # Grafana
-  - 3100  # Loki
-  - 9093  # Alertmanager
-  - 9100  # Node Exporter
-  - 8080  # cAdvisor
-  - 9080  # Promtail
-
 # Log rotation configuration
 monitoring_enable_logrotate: true
 monitoring_log_retention_days: 14

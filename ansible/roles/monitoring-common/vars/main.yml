@@ -37,17 +37,6 @@ monitoring_log_max_size: "100M"
 # Scripts directory
 monitoring_scripts_dir: "{{ monitoring_base_dir }}/scripts"
 
-# Firewall configuration
-monitoring_configure_firewall: false
-monitoring_firewall_ports:
-  - "9090" # Prometheus
-  - "3000" # Grafana
-  - "3100" # Loki
-  - "9093" # Alertmanager
-  - "9100" # Node Exporter
-  - "8080" # cAdvisor
-  - "9080" # Promtail
-
 # Default resource limits
 monitoring_default_memory_limit: "512M"
 monitoring_default_cpu_limit: "1.0"

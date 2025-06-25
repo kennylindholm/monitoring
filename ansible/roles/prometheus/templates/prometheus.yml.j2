@@ -21,6 +21,9 @@ scrape_configs:
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080']
+{% for host in groups['docker_hosts'] %}
+      - targets: ['{{ hostvars[host]['ansible_host'] }}:8080']  # {{ host }}
+{% endfor %}
 
   - job_name: 'alertmanager'
     static_configs:

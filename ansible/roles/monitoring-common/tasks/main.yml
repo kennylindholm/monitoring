@@ -155,30 +155,6 @@
     mode: "0644"
   when: false # Template doesn't exist yet
 
-- name: Configure firewall for monitoring services (firewalld)
-  firewalld:
-    port: "{{ item }}/tcp"
-    permanent: yes
-    state: enabled
-    zone: public
-    immediate: yes
-  loop: "{{ monitoring_firewall_ports }}"
-  when:
-    - monitoring_configure_firewall
-    - ansible_os_family == "RedHat"
-  ignore_errors: yes
-
-- name: Configure firewall for monitoring services (ufw)
-  ufw:
-    rule: allow
-    port: "{{ item }}"
-    proto: tcp
-  loop: "{{ monitoring_firewall_ports }}"
-  when:
-    - monitoring_configure_firewall
-    - ansible_os_family == "Debian"
-  ignore_errors: yes
-
 - name: Set system resource limits for monitoring
   pam_limits:
     domain: "{{ monitoring_user if monitoring_create_user else '*' }}"

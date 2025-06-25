@@ -6,19 +6,19 @@ This directory contains individual Ansible roles for deploying a complete monito
 
 ### Core Components
 
-- **prometheus** - Time-series metrics database and monitoring system
-- **grafana** - Visualization and dashboarding platform
-- **loki** - Log aggregation system
-- **alertmanager** - Alert routing and management
+- **prometheus** - Time-series metrics database and monitoring system (Port: 9090)
+- **grafana** - Visualization and dashboarding platform (Port: 3000)
+- **loki** - Log aggregation system (Port: 3100)
+- **alertmanager** - Alert routing and management (Port: 9093)
 
 ### Exporters
 
-- **node-exporter** - System and hardware metrics exporter
-- **cadvisor** - Container metrics exporter
+- **node-exporter** - System and hardware metrics exporter (Port: 9100)
+- **cadvisor** - Container metrics exporter (Port: 8080)
 
 ### Collectors
 
-- **promtail** - Log collector and forwarder for Loki
+- **promtail** - Log collector and forwarder for Loki (Port: 9080)
 
 ### Supporting Roles
 
@@ -137,7 +137,7 @@ monitoring_backup_retention_days: 7
 
 Each role has its own variables that can be overridden:
 
-#### Prometheus
+#### Prometheus (Port: 9090)
 
 ```yaml
 prometheus_port: 9090
@@ -146,7 +146,7 @@ prometheus_scrape_interval: "15s"
 prometheus_image: "prom/prometheus:latest"
 ```
 
-#### Grafana
+#### Grafana (Port: 3000)
 
 ```yaml
 grafana_port: 3000
@@ -155,7 +155,7 @@ grafana_admin_password: "SecurePassword123!"
 grafana_image: "grafana/grafana:latest"
 ```
 
-#### Loki
+#### Loki (Port: 3100)
 
 ```yaml
 loki_port: 3100
@@ -163,7 +163,7 @@ loki_retention_period: "744h"
 loki_image: "grafana/loki:latest"
 ```
 
-#### Alertmanager
+#### Alertmanager (Port: 9093)
 
 ```yaml
 alertmanager_port: 9093
@@ -171,6 +171,43 @@ alertmanager_smtp_enabled: false
 alertmanager_slack_enabled: false
 alertmanager_image: "prom/alertmanager:latest"
 ```
+
+#### Node Exporter (Port: 9100)
+
+```yaml
+node_exporter_port: 9100
+node_exporter_log_level: "info"
+```
+
+#### cAdvisor (Port: 8080)
+
+```yaml
+cadvisor_port: 8080
+cadvisor_docker_only: true
+```
+
+#### Promtail (Port: 9080)
+
+```yaml
+promtail_port: 9080
+promtail_loki_url: "http://loki:3100"
+```
+
+## Port Usage
+
+The monitoring stack uses the following ports:
+
+| Service       | Port | Protocol | Purpose                   |
+| ------------- | ---- | -------- | ------------------------- |
+| Prometheus    | 9090 | HTTP     | Web UI and API            |
+| Grafana       | 3000 | HTTP     | Web UI                    |
+| Loki          | 3100 | HTTP     | Log ingestion and queries |
+| Alertmanager  | 9093 | HTTP     | Web UI and API            |
+| Node Exporter | 9100 | HTTP     | Metrics endpoint          |
+| cAdvisor      | 8080 | HTTP     | Container metrics         |
+| Promtail      | 9080 | HTTP     | Health and targets API    |
+
+**Note**: Ensure these ports are available and not conflicting with other services on your hosts.
 
 ## Dependencies
 
@@ -180,6 +217,7 @@ alertmanager_image: "prom/alertmanager:latest"
 - Python Docker SDK (`python3-pip install docker docker-compose`)
 - Sufficient disk space for data retention
 - Network connectivity between components
+- Available ports as listed above
 
 ### Role Dependencies
 

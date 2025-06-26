@@ -1,0 +1,74 @@
+---
+- name: Deploy Monitoring Scripts
+  hosts: monitoring_servers
+  become: true
+  gather_facts: true
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+  pre_tasks:
+    - name: Verify monitoring base directory exists
+      stat:
+        path: "{{ monitoring_base_dir | default('/opt/monitoring') }}"
+      register: monitoring_dir_stat
+
+    - name: Fail if monitoring base directory does not exist
+      fail:
+        msg: "Monitoring base directory {{ monitoring_base_dir | default('/opt/monitoring') }} does not exist. Please run monitoring-common setup first."
+      when: not monitoring_dir_stat.stat.exists
+
+  roles:
+    - role: monitoring-scripts
+      tags:
+        - monitoring-scripts
+        - scripts
+        - backup
+        - health-check
+
+  post_tasks:
+    - name: Verify script installation
+      stat:
+        path: "{{ monitoring_scripts_dir | default('/opt/monitoring/scripts') }}/{{ item }}"
+      register: script_verification
+      loop:
+        - check-services.sh
+        - service-status.sh
+        - health-check.sh
+      tags: verify
+
+    - name: Display script installation status
+      debug:
+        msg: "Script {{ item.item }} is {{ 'installed' if item.stat.exists else 'missing' }}"
+      loop: "{{ script_verification.results }}"
+      tags: verify
+
+    - name: Test script execution permissions
+      command: "{{ monitoring_scripts_dir | default('/opt/monitoring/scripts') }}/{{ item }} --help"
+      register: script_test
+      failed_when: false
+      changed_when: false
+      loop:
+        - check-services.sh
+        - service-status.sh
+        - health-check.sh
+      tags: verify
+
+    - name: Display script test results
+      debug:
+        msg: "Script {{ item.item }} execution test: {{ 'PASSED' if item.rc == 0 else 'FAILED' }}"
+      loop: "{{ script_test.results }}"
+      tags: verify
+
+  handlers:
+    - name: restart cron
+      service:
+        name: cron
+        state: restarted
+      when: ansible_os_family == "Debian"
+
+    - name: restart crond
+      service:
+        name: crond
+        state: restarted
+      when: ansible_os_family == "RedHat"

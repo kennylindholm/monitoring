@@ -3,7 +3,7 @@
 
 .PHONY: help ping docker-status \
         deploy-prometheus deploy-grafana deploy-loki deploy-alertmanager \
-        deploy-node-exporter deploy-cadvisor deploy-promtail \
+        deploy-node-exporter deploy-cadvisor deploy-promtail deploy-monitoring-scripts \
         monitoring-status monitoring-logs \
         monitoring-stop monitoring-start monitoring-restart monitoring-health \
         monitoring-backup monitoring-update monitoring-check
@@ -27,6 +27,7 @@ help:
 	@echo "  deploy-promtail         - Deploy Promtail on client_hosts"
 	@echo "  deploy-node-exporter    - Deploy Node Exporter on client_hosts"
 	@echo "  deploy-cadvisor         - Deploy cAdvisor on docker_hosts"
+	@echo "  deploy-monitoring-scripts - Deploy monitoring scripts (backup, health-check, etc.)"
 	@echo ""
 	@echo "Monitoring Stack - Management:"
 	@echo "  monitoring-status       - Check status of all monitoring services"
@@ -99,6 +100,10 @@ deploy-cadvisor:
 deploy-promtail:
 	ansible-playbook playbooks/deploy-promtail.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
+# Deploy monitoring scripts (backup, health-check, service status)
+deploy-monitoring-scripts:
+	ansible-playbook playbooks/deploy-monitoring-scripts.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+
 # Monitoring management commands
 monitoring-status:
 	@if [ -f /opt/monitoring/scripts/check-services.sh ]; then \
@@ -145,6 +150,7 @@ monitoring-update:
 	ansible-playbook playbooks/deploy-cadvisor.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 	ansible-playbook playbooks/deploy-node-exporter.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 	ansible-playbook playbooks/deploy-promtail.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+	ansible-playbook playbooks/deploy-monitoring-scripts.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
 
 # Show monitoring URLs

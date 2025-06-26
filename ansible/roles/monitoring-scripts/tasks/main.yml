@@ -1,0 +1,62 @@
+---
+- name: Ensure monitoring scripts directory exists
+  file:
+    path: "{{ monitoring_scripts_dir }}"
+    state: directory
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    mode: "0755"
+
+- name: Install monitoring backup script
+  template:
+    src: backup-monitoring.sh.j2
+    dest: "{{ monitoring_base_dir }}/scripts/backup-monitoring.sh"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    mode: "0755"
+  when: monitoring_enable_backup
+
+- name: Install monitoring helper scripts
+  template:
+    src: "{{ item }}.j2"
+    dest: "{{ monitoring_scripts_dir }}/{{ item }}"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    mode: "0755"
+  loop:
+    - check-services.sh
+
+- name: Create monitoring service status script
+  template:
+    src: service-status.sh.j2
+    dest: "{{ monitoring_scripts_dir }}/service-status.sh"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    mode: "0755"
+
+- name: Install monitoring health check script
+  template:
+    src: health-check.sh.j2
+    dest: "{{ monitoring_scripts_dir }}/health-check.sh"
+    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    mode: "0755"
+
+- name: Set up monitoring health check cron job
+  cron:
+    name: "Monitoring health check"
+    job: "{{ monitoring_scripts_dir }}/health-check.sh"
+    minute: "*/5"
+    user: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    state: present
+  when: monitoring_healthcheck_enabled and not ansible_check_mode
+
+- name: Set up monitoring backup cron job
+  cron:
+    name: "Monitoring stack backup"
+    job: "{{ monitoring_base_dir }}/scripts/backup-monitoring.sh"
+    hour: "{{ monitoring_backup_hour }}"
+    minute: "{{ monitoring_backup_minute }}"
+    user: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
+    state: present
+  when: monitoring_enable_backup and not ansible_check_mode

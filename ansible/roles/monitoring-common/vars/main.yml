@@ -100,12 +100,6 @@ monitoring_timezone: "UTC"
 monitoring_debug_enabled: false
 monitoring_debug_level: "info"
 
-# Health check settings
-monitoring_healthcheck_enabled: true
-monitoring_healthcheck_interval: "30s"
-monitoring_healthcheck_timeout: "10s"
-monitoring_healthcheck_retries: 3
-
 # Resource monitoring
 monitoring_enable_resource_monitoring: true
 monitoring_resource_alert_threshold_cpu: 80

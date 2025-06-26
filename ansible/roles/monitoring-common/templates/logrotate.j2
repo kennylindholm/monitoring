@@ -141,8 +141,8 @@
     create 644 {{ monitoring_user if monitoring_create_user else 'root' }} {{ monitoring_user if monitoring_create_user else 'root' }}
 }
 
-# Health check logs
-{{ monitoring_base_dir }}/logs/health-check.log {
+# Service check logs
+{{ monitoring_base_dir }}/logs/service-check.log {
     daily
     rotate 30
     maxsize 10M

@@ -16,10 +16,6 @@ monitoring_backup_hour: "2"
 monitoring_backup_minute: "0"
 monitoring_backup_retention_days: 7
 
-# Health check configuration
-monitoring_healthcheck_enabled: true
-monitoring_healthcheck_interval: "*/5"
-
 # Script permissions
 monitoring_script_owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
 monitoring_script_group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"

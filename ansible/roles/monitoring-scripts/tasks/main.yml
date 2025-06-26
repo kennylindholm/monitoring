@@ -34,23 +34,6 @@
     group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
     mode: "0755"
 
-- name: Install monitoring health check script
-  template:
-    src: health-check.sh.j2
-    dest: "{{ monitoring_scripts_dir }}/health-check.sh"
-    owner: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
-    group: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
-    mode: "0755"
-
-- name: Set up monitoring health check cron job
-  cron:
-    name: "Monitoring health check"
-    job: "{{ monitoring_scripts_dir }}/health-check.sh"
-    minute: "*/5"
-    user: "{{ monitoring_user if monitoring_create_user else ansible_user }}"
-    state: present
-  when: monitoring_healthcheck_enabled and not ansible_check_mode
-
 - name: Set up monitoring backup cron job
   cron:
     name: "Monitoring stack backup"

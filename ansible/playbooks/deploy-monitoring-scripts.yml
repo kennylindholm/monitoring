@@ -24,7 +24,6 @@
         - monitoring-scripts
         - scripts
         - backup
-        - health-check
 
   post_tasks:
     - name: Verify script installation
@@ -34,7 +33,6 @@
       loop:
         - check-services.sh
         - service-status.sh
-        - health-check.sh
       tags: verify
 
     - name: Display script installation status
@@ -51,7 +49,6 @@
       loop:
         - check-services.sh
         - service-status.sh
-        - health-check.sh
       tags: verify
 
     - name: Display script test results

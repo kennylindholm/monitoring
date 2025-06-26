@@ -27,7 +27,7 @@ help:
 	@echo "  deploy-promtail         - Deploy Promtail on client_hosts"
 	@echo "  deploy-node-exporter    - Deploy Node Exporter on client_hosts"
 	@echo "  deploy-cadvisor         - Deploy cAdvisor on docker_hosts"
-	@echo "  deploy-monitoring-scripts - Deploy monitoring scripts (backup, health-check, etc.)"
+	@echo "  deploy-monitoring-scripts - Deploy monitoring scripts (backup, service status, etc.)"
 	@echo ""
 	@echo "Monitoring Stack - Management:"
 	@echo "  monitoring-status       - Check status of all monitoring services"
@@ -100,7 +100,7 @@ deploy-cadvisor:
 deploy-promtail:
 	ansible-playbook playbooks/deploy-promtail.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
-# Deploy monitoring scripts (backup, health-check, service status)
+# Deploy monitoring scripts (backup, service status)
 deploy-monitoring-scripts:
 	ansible-playbook playbooks/deploy-monitoring-scripts.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 

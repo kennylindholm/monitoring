@@ -1,6 +1,6 @@
 ---
 - name: Install Docker on Debian 12 servers
-  hosts: debian_servers
+  hosts: monitoring_servers
   become: true
   gather_facts: true
 

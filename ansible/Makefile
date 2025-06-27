@@ -177,7 +177,7 @@ restart-cadvisor:
 
 # Show inventory
 inventory:
-	ansible-inventory --list
+	ansible-inventory --list --ask-vault-pass
 
 # Show facts for monitoring servers
 facts:

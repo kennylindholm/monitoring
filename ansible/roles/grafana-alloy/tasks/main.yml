@@ -1,0 +1,191 @@
+---
+# Grafana Alloy installation and configuration tasks
+
+- name: Create alloy system group
+  group:
+    name: "{{ grafana_alloy_group }}"
+    system: yes
+    state: present
+
+- name: Create alloy system user
+  user:
+    name: "{{ grafana_alloy_user }}"
+    group: "{{ grafana_alloy_group }}"
+    system: yes
+    shell: "{{ grafana_alloy_shell }}"
+    home: "{{ grafana_alloy_home }}"
+    create_home: yes
+    state: present
+
+- name: Create alloy directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ grafana_alloy_user }}"
+    group: "{{ grafana_alloy_group }}"
+    mode: '0755'
+  loop:
+    - "{{ grafana_alloy_config_dir }}"
+    - "{{ grafana_alloy_data_dir }}"
+    - "{{ grafana_alloy_log_dir }}"
+    - "{{ grafana_alloy_data_dir }}/textfile_collector"
+
+- name: Check if alloy is already installed
+  stat:
+    path: "{{ grafana_alloy_bin_path }}"
+  register: alloy_binary
+
+- name: Get installed alloy version
+  command: "{{ grafana_alloy_bin_path }} --version"
+  register: alloy_installed_version
+  when: alloy_binary.stat.exists
+  changed_when: false
+  failed_when: false
+
+- name: Download and install alloy
+  block:
+    - name: Download alloy archive
+      get_url:
+        url: "{{ grafana_alloy_download_url }}"
+        dest: "{{ grafana_alloy_temp_dir }}/alloy.zip"
+        mode: '0644'
+        timeout: 60
+      register: alloy_download
+
+    - name: Extract alloy archive
+      unarchive:
+        src: "{{ grafana_alloy_temp_dir }}/alloy.zip"
+        dest: "{{ grafana_alloy_temp_dir }}"
+        remote_src: yes
+        creates: "{{ grafana_alloy_temp_dir }}/alloy-linux-{{ grafana_alloy_arch_map[ansible_architecture] }}"
+
+    - name: Install alloy binary
+      copy:
+        src: "{{ grafana_alloy_temp_dir }}/alloy-linux-{{ grafana_alloy_arch_map[ansible_architecture] }}"
+        dest: "{{ grafana_alloy_bin_path }}"
+        owner: root
+        group: root
+        mode: '0755'
+        remote_src: yes
+      notify: restart alloy
+
+    - name: Cleanup downloaded files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ grafana_alloy_temp_dir }}/alloy.zip"
+        - "{{ grafana_alloy_temp_dir }}/alloy-linux-{{ grafana_alloy_arch_map[ansible_architecture] }}"
+      when: grafana_alloy_cleanup_downloads
+
+  when: >
+    not alloy_binary.stat.exists or
+    (alloy_installed_version.stdout is defined and
+     grafana_alloy_version not in alloy_installed_version.stdout)
+
+- name: Create alloy configuration
+  template:
+    src: config.alloy.j2
+    dest: "{{ grafana_alloy_config_file }}"
+    owner: "{{ grafana_alloy_user }}"
+    group: "{{ grafana_alloy_group }}"
+    mode: '0640'
+    backup: yes
+  notify: restart alloy
+  register: alloy_config
+
+- name: Validate alloy configuration
+  command: "{{ grafana_alloy_bin_path }} fmt {{ grafana_alloy_config_file }}"
+  register: alloy_config_validation
+  changed_when: false
+  failed_when: alloy_config_validation.rc != 0
+  when:
+    - grafana_alloy_validate_config
+    - alloy_config is changed
+
+- name: Create alloy systemd service
+  template:
+    src: alloy.service.j2
+    dest: /etc/systemd/system/alloy.service
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  notify:
+    - reload systemd
+    - restart alloy
+
+- name: Set capabilities for alloy binary
+  capabilities:
+    path: "{{ grafana_alloy_bin_path }}"
+    capability: "{{ item }}"
+    state: present
+  loop: "{{ grafana_alloy_capabilities }}"
+  when: not grafana_alloy_run_as_root
+
+- name: Configure firewall for alloy
+  firewalld:
+    port: "{{ item }}/tcp"
+    permanent: yes
+    state: enabled
+    zone: "{{ grafana_alloy_firewall_zone }}"
+    immediate: yes
+  loop:
+    - "{{ grafana_alloy_server_http_listen_port }}"
+    - "{{ grafana_alloy_server_grpc_listen_port }}"
+  when: grafana_alloy_firewall_enabled
+  notify: reload firewalld
+
+- name: Ensure alloy service is enabled and started
+  systemd:
+    name: alloy
+    enabled: "{{ grafana_alloy_service_enabled }}"
+    state: "{{ grafana_alloy_service_state }}"
+    daemon_reload: yes
+  register: alloy_service_result
+
+- name: Wait for alloy to be ready
+  uri:
+    url: "http://localhost:{{ grafana_alloy_server_http_listen_port }}/-/ready"
+    method: GET
+    status_code: 200
+    timeout: 30
+  register: alloy_ready_check
+  retries: 10
+  delay: 5
+  until: alloy_ready_check.status == 200
+  when: grafana_alloy_service_state == "started"
+
+- name: Create textfile collector directory
+  file:
+    path: "{{ grafana_alloy_data_dir }}/textfile_collector"
+    state: directory
+    owner: "{{ grafana_alloy_user }}"
+    group: "{{ grafana_alloy_group }}"
+    mode: '0755'
+
+- name: Create custom metric collection script
+  template:
+    src: custom_metrics.sh.j2
+    dest: "{{ grafana_alloy_data_dir }}/custom_metrics.sh"
+    owner: "{{ grafana_alloy_user }}"
+    group: "{{ grafana_alloy_group }}"
+    mode: '0755'
+
+- name: Set up custom metrics cron job
+  cron:
+    name: "alloy custom metrics collection"
+    minute: "*/1"
+    user: "{{ grafana_alloy_user }}"
+    job: "{{ grafana_alloy_data_dir }}/custom_metrics.sh > {{ grafana_alloy_data_dir }}/textfile_collector/custom_metrics.prom"
+    state: present
+
+- name: Display alloy service status
+  debug:
+    msg: |
+      Alloy service status: {{ alloy_service_result.status.ActiveState | default('Unknown') }}
+      Configuration file: {{ grafana_alloy_config_file }}
+      Data directory: {{ grafana_alloy_data_dir }}
+      Log directory: {{ grafana_alloy_log_dir }}
+      Web UI: http://{{ ansible_default_ipv4.address }}:{{ grafana_alloy_server_http_listen_port }}
+      Metrics: http://{{ ansible_default_ipv4.address }}:{{ grafana_alloy_server_http_listen_port }}/metrics

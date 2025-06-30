@@ -23,9 +23,9 @@
       - job_name: "prometheus"
         static_configs:
           - targets: ["localhost:9090"]
-      - job_name: "node-exporter"
+      - job_name: "grafana-agent"
         static_configs:
-          - targets: ["localhost:9100"]
+          - targets: ["localhost:12345"]
 
   pre_tasks:
     - name: Display deployment information
@@ -291,7 +291,7 @@
             metrics_path: '/federate'
             params:
               'match[]':
-                - '{job=~"prometheus|node-exporter"}'
+                - '{job=~"prometheus|grafana-agent"}'
                 - '{__name__=~"job:.*"}'
             static_configs:
               - targets:

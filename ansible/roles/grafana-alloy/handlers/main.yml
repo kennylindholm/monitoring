@@ -1,0 +1,60 @@
+---
+# Grafana Alloy handlers
+
+- name: restart alloy
+  systemd:
+    name: alloy
+    state: restarted
+    daemon_reload: yes
+  listen: "restart alloy"
+
+- name: reload alloy
+  systemd:
+    name: alloy
+    state: reloaded
+  listen: "reload alloy"
+
+- name: start alloy
+  systemd:
+    name: alloy
+    state: started
+    enabled: yes
+  listen: "start alloy"
+
+- name: stop alloy
+  systemd:
+    name: alloy
+    state: stopped
+  listen: "stop alloy"
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+  listen: "reload systemd"
+
+- name: reload firewalld
+  firewalld:
+    state: reloaded
+  when: ansible_facts['os_family'] == "RedHat"
+  listen: "reload firewalld"
+
+- name: restart firewalld
+  systemd:
+    name: firewalld
+    state: restarted
+  when: ansible_facts['os_family'] == "RedHat"
+  listen: "restart firewalld"
+
+- name: validate alloy config
+  command: "{{ grafana_alloy_bin_path }} fmt {{ grafana_alloy_config_file }}"
+  register: alloy_config_check
+  changed_when: false
+  failed_when: alloy_config_check.rc != 0
+  listen: "validate alloy config"
+
+- name: check alloy status
+  systemd:
+    name: alloy
+    state: started
+  register: alloy_status_check
+  listen: "check alloy status"

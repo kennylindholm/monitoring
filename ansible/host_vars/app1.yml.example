@@ -1,0 +1,165 @@
+---
+# Host-specific configuration for application server (app1)
+# This is an example configuration for a typical application server
+
+# Basic node metrics - always enabled
+grafana_alloy_node_exporter_enabled: true
+grafana_alloy_node_exporter_scrape_interval: "15s"
+
+# Docker metrics - enable if this host runs Docker containers
+grafana_alloy_docker_enabled: false
+grafana_alloy_docker_host: "unix:///var/run/docker.sock"
+grafana_alloy_docker_scrape_interval: "30s"  # Less frequent for app servers
+
+# cAdvisor metrics - enable if Docker is used and cAdvisor is running
+grafana_alloy_cadvisor_enabled: false
+grafana_alloy_cadvisor_url: "http://localhost:8080"
+grafana_alloy_cadvisor_scrape_interval: "30s"
+
+# Docker logs - enable if using Docker
+grafana_alloy_docker_logs_enabled: false
+grafana_alloy_docker_logs_labels:
+  job: "docker"
+  hostname: "app1"
+  environment: "production"
+  tier: "application"
+
+# Custom application logs
+grafana_alloy_custom_logs:
+  - name: "application_logs"
+    enabled: true
+    type: "file"
+    path: "/var/log/myapp/*.log"
+    labels:
+      job: "myapp"
+      hostname: "app1"
+      service: "myapp"
+      environment: "production"
+      tier: "application"
+    multiline:
+      firstline: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'
+      max_wait_time: "3s"
+      max_lines: 1000
+    regex: "(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}.\\d{3})\\s+(?P<level>\\w+)\\s+(?P<logger>[^\\s]+)\\s+(?P<message>.*)"
+    pipeline_labels:
+      level: "level"
+      logger: "logger"
+    timestamp:
+      source: "timestamp"
+      format: "2006-01-02 15:04:05.000"
+
+  - name: "nginx_access"
+    enabled: true
+    type: "file"
+    path: "/var/log/nginx/access.log"
+    labels:
+      job: "nginx"
+      hostname: "app1"
+      service: "nginx"
+      log_type: "access"
+      environment: "production"
+    regex: "(?P<remote_addr>[\\d\\.]+)\\s+-\\s+(?P<remote_user>\\S+)\\s+\\[(?P<timestamp>[^\\]]+)\\]\\s+\"(?P<method>\\w+)\\s+(?P<path>\\S+)\\s+(?P<protocol>[^\"]+)\"\\s+(?P<status>\\d+)\\s+(?P<body_bytes_sent>\\d+)"
+    pipeline_labels:
+      method: "method"
+      status: "status"
+      remote_addr: "client_ip"
+    timestamp:
+      source: "timestamp"
+      format: "02/Jan/2006:15:04:05 -0700"
+
+  - name: "nginx_error"
+    enabled: true
+    type: "file"
+    path: "/var/log/nginx/error.log"
+    labels:
+      job: "nginx"
+      hostname: "app1"
+      service: "nginx"
+      log_type: "error"
+      environment: "production"
+    regex: "(?P<timestamp>\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2})\\s+\\[(?P<level>\\w+)\\]\\s+(?P<message>.*)"
+    pipeline_labels:
+      level: "level"
+    timestamp:
+      source: "timestamp"
+      format: "2006/01/02 15:04:05"
+
+  - name: "database_logs"
+    enabled: false  # Enable if database is running on this host
+    type: "file"
+    path: "/var/log/mysql/*.log"
+    labels:
+      job: "mysql"
+      hostname: "app1"
+      service: "mysql"
+      environment: "production"
+
+  - name: "php_fpm_logs"
+    enabled: false  # Enable if using PHP-FPM
+    type: "file"
+    path: "/var/log/php*-fpm.log"
+    labels:
+      job: "php-fpm"
+      hostname: "app1"
+      service: "php-fpm"
+      environment: "production"
+
+  - name: "apache_access"
+    enabled: false  # Enable if using Apache instead of Nginx
+    type: "file"
+    path: "/var/log/apache2/access.log"
+    labels:
+      job: "apache"
+      hostname: "app1"
+      service: "apache"
+      log_type: "access"
+      environment: "production"
+
+# Additional external labels for this host
+grafana_alloy_additional_external_labels:
+  role: "application_server"
+  environment: "production"
+  tier: "web"
+  application: "myapp"
+  datacenter: "primary"
+
+# Security settings
+grafana_alloy_firewall_enabled: false  # Usually behind internal firewall
+grafana_alloy_run_as_root: false
+
+# Performance settings for application server
+grafana_alloy_memory_ballast_size: "64MiB"
+grafana_alloy_max_memory_limit: "256MiB"
+
+# Logging configuration
+grafana_alloy_server_log_level: "warn"  # Less verbose for app servers
+grafana_alloy_log_format: "logfmt"
+
+# Node exporter collectors - optimized for application servers
+grafana_alloy_node_exporter_enabled_collectors:
+  - cpu
+  - cpufreq
+  - diskstats
+  - filesystem
+  - loadavg
+  - meminfo
+  - netdev
+  - netstat
+  - stat
+  - time
+  - uname
+  - vmstat
+  - systemd
+  - processes
+  - textfile
+
+# Filesystem monitoring - exclude common application paths
+grafana_alloy_node_exporter_filesystem_ignored_mount_points: "^/(dev|proc|sys|var/lib/docker/.+|tmp|var/tmp)($|/)"
+grafana_alloy_node_exporter_filesystem_ignored_fs_types: "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|tmpfs)$"
+
+# Custom metrics collection interval
+grafana_alloy_prometheus_scrape_interval: "30s"  # Less frequent for app servers
+
+# Backup settings
+grafana_alloy_backup_enabled: false
+grafana_alloy_cleanup_downloads: true

@@ -1,0 +1,230 @@
+---
+# Host-specific configuration for Docker host
+# This is an example configuration for a dedicated Docker host running containers
+
+# Basic node metrics - always enabled
+grafana_alloy_node_exporter_enabled: true
+grafana_alloy_node_exporter_scrape_interval: "15s"
+
+# Docker metrics - ENABLED for Docker hosts
+grafana_alloy_docker_enabled: true
+grafana_alloy_docker_host: "unix:///var/run/docker.sock"
+grafana_alloy_docker_scrape_interval: "15s"
+
+# cAdvisor metrics - ENABLED for container monitoring
+grafana_alloy_cadvisor_enabled: true
+grafana_alloy_cadvisor_url: "http://localhost:8080"
+grafana_alloy_cadvisor_scrape_interval: "15s"
+
+# Docker logs - ENABLED to collect container logs
+grafana_alloy_docker_logs_enabled: true
+grafana_alloy_docker_logs_labels:
+  job: "docker"
+  hostname: "docker-host"
+  environment: "production"
+  tier: "container"
+
+# Custom logs specific to Docker operations
+grafana_alloy_custom_logs:
+  - name: "docker_daemon"
+    enabled: true
+    type: "file"
+    path: "/var/log/docker.log"
+    labels:
+      job: "docker"
+      hostname: "docker-host"
+      service: "docker"
+      log_type: "daemon"
+      environment: "production"
+    regex: "(?P<timestamp>\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.\\d{9}Z)\\s+(?P<level>\\w+)\\s+(?P<message>.*)"
+    pipeline_labels:
+      level: "level"
+    timestamp:
+      source: "timestamp"
+      format: "RFC3339Nano"
+
+  - name: "containerd_logs"
+    enabled: true
+    type: "file"
+    path: "/var/log/containerd/containerd.log"
+    labels:
+      job: "containerd"
+      hostname: "docker-host"
+      service: "containerd"
+      environment: "production"
+    regex: "(?P<timestamp>\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.\\d{9}Z)\\s+(?P<level>\\w+)\\s+(?P<message>.*)"
+    pipeline_labels:
+      level: "level"
+    timestamp:
+      source: "timestamp"
+      format: "RFC3339Nano"
+
+  - name: "docker_compose_logs"
+    enabled: true
+    type: "file"
+    path: "/var/log/docker-compose/*.log"
+    labels:
+      job: "docker-compose"
+      hostname: "docker-host"
+      service: "docker-compose"
+      environment: "production"
+
+  - name: "container_health_logs"
+    enabled: true
+    type: "file"
+    path: "/var/log/containers/health-*.log"
+    labels:
+      job: "container-health"
+      hostname: "docker-host"
+      service: "health-check"
+      environment: "production"
+
+  - name: "portainer_logs"
+    enabled: false  # Enable if Portainer is used
+    type: "file"
+    path: "/var/log/portainer/*.log"
+    labels:
+      job: "portainer"
+      hostname: "docker-host"
+      service: "portainer"
+      environment: "production"
+
+  - name: "traefik_access"
+    enabled: false  # Enable if Traefik is used as reverse proxy
+    type: "file"
+    path: "/var/log/traefik/access.log"
+    labels:
+      job: "traefik"
+      hostname: "docker-host"
+      service: "traefik"
+      log_type: "access"
+      environment: "production"
+    json:
+      timestamp: "StartUTC"
+      method: "RequestMethod"
+      url: "RequestPath"
+      status: "DownstreamStatus"
+      duration: "Duration"
+      client_ip: "ClientAddr"
+    pipeline_labels:
+      method: "method"
+      status: "status"
+      client_ip: "client_ip"
+    timestamp:
+      source: "timestamp"
+      format: "RFC3339"
+
+  - name: "traefik_error"
+    enabled: false  # Enable if Traefik is used
+    type: "file"
+    path: "/var/log/traefik/traefik.log"
+    labels:
+      job: "traefik"
+      hostname: "docker-host"
+      service: "traefik"
+      log_type: "error"
+      environment: "production"
+
+# Additional external labels for Docker host
+grafana_alloy_additional_external_labels:
+  role: "docker_host"
+  environment: "production"
+  tier: "container"
+  orchestrator: "docker"
+  datacenter: "primary"
+
+# Security settings for Docker host
+grafana_alloy_firewall_enabled: true
+grafana_alloy_firewall_zone: "docker"
+grafana_alloy_run_as_root: false
+
+# Additional capabilities needed for Docker monitoring
+grafana_alloy_capabilities:
+  - "dac_read_search"
+  - "sys_ptrace"
+  - "net_admin"  # For network monitoring in containers
+
+# Performance settings optimized for Docker workloads
+grafana_alloy_memory_ballast_size: "256MiB"
+grafana_alloy_max_memory_limit: "512MiB"
+
+# Enhanced logging for Docker operations
+grafana_alloy_server_log_level: "info"
+grafana_alloy_log_format: "json"  # JSON format for better parsing
+
+# Node exporter collectors - enhanced for Docker hosts
+grafana_alloy_node_exporter_enabled_collectors:
+  - arp
+  - bcache
+  - conntrack
+  - cpu
+  - cpufreq
+  - diskstats
+  - entropy
+  - filefd
+  - filesystem
+  - hwmon
+  - loadavg
+  - meminfo
+  - netdev
+  - netstat
+  - sockstat
+  - stat
+  - textfile
+  - time
+  - timex
+  - uname
+  - vmstat
+  - systemd
+  - processes
+  - interrupts
+  - softirqs
+
+# Filesystem monitoring - Docker-specific exclusions
+grafana_alloy_node_exporter_filesystem_ignored_mount_points: "^/(dev|proc|sys|var/lib/docker/.+|var/lib/containers/.+|run/docker/.+)($|/)"
+grafana_alloy_node_exporter_filesystem_ignored_fs_types: "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|tmpfs|shm)$"
+
+# Network device exclusions for Docker
+grafana_alloy_node_exporter_netdev_device_exclude: "^(veth.*|docker.*|br-.*|lo|virbr.*)$"
+
+# More frequent scraping for Docker hosts
+grafana_alloy_prometheus_scrape_interval: "15s"
+
+# Backup configuration for Docker hosts
+grafana_alloy_backup_enabled: true
+grafana_alloy_backup_retention_days: 7
+
+# Feature flags for Docker-specific features
+grafana_alloy_feature_flags:
+  - "enable-docker-discovery"
+  - "enable-container-logs"
+
+# Enable profiling for performance monitoring
+grafana_alloy_profiling_enabled: true
+
+# Clustering configuration (if running multiple Docker hosts)
+grafana_alloy_clustering_enabled: false
+grafana_alloy_clustering_peers: []
+# Example for clustering:
+# grafana_alloy_clustering_enabled: true
+# grafana_alloy_clustering_peers:
+#   - "docker-host-2:12346"
+#   - "docker-host-3:12346"
+
+# Custom textfile metrics for Docker monitoring
+# These would be generated by custom scripts
+grafana_alloy_custom_textfile_metrics:
+  - name: "docker_container_restarts"
+    description: "Number of container restarts in the last hour"
+    script: "/opt/scripts/docker-restart-count.sh"
+    interval: "*/5 * * * *"  # Every 5 minutes
+
+  - name: "docker_image_vulnerabilities"
+    description: "Container image vulnerability scan results"
+    script: "/opt/scripts/docker-vuln-scan.sh"
+    interval: "0 */4 * * *"  # Every 4 hours
+
+  - name: "docker_registry_sync"
+    description: "Docker registry synchronization status"
+    script: "/opt/scripts/registry-sync-status.sh"
+    interval: "*/10 * * * *"  # Every 10 minutes

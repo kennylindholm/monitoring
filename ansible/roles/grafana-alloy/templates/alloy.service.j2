@@ -1,0 +1,97 @@
+[Unit]
+Description=Grafana Alloy
+Documentation=https://grafana.com/docs/alloy/
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor={{ grafana_alloy_data_dir }}
+
+[Service]
+Type=simple
+User={{ grafana_alloy_user }}
+Group={{ grafana_alloy_group }}
+ExecStart={{ grafana_alloy_bin_path }} run {{ grafana_alloy_config_file }} \
+    --server.http.listen-addr={{ grafana_alloy_server_address }}:{{ grafana_alloy_server_http_listen_port }} \
+    --server.grpc.listen-addr={{ grafana_alloy_server_address }}:{{ grafana_alloy_server_grpc_listen_port }} \
+    --storage.path={{ grafana_alloy_data_dir }} \
+    --stability.level={{ grafana_alloy_stability_level }}{% if grafana_alloy_clustering_enabled %} \
+    --cluster.enabled=true \
+    --cluster.node-name={{ ansible_hostname }}{% endif %}{% if grafana_alloy_feature_flags %} \
+{% for flag in grafana_alloy_feature_flags %}
+    --enable-feature={{ flag }}{% if not loop.last %} \{% endif %}
+{% endfor %}{% endif %}
+
+ExecReload=/bin/kill -HUP $MAINPID
+TimeoutStopSec=20s
+SendSIGKILL=no
+Restart=on-failure
+RestartSec=5s
+
+# Security settings
+NoNewPrivileges=yes
+{% if not grafana_alloy_run_as_root %}
+DynamicUser=no
+{% endif %}
+
+# Filesystem protection
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ grafana_alloy_data_dir }}
+ReadWritePaths={{ grafana_alloy_log_dir }}
+ReadWritePaths={{ grafana_alloy_config_dir }}
+ReadWritePaths=/var/log
+ReadWritePaths=/var/lib/docker
+ReadWritePaths=/tmp
+
+# Network protection
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+# Process protection
+LockPersonality=true
+MemoryDenyWriteExecute=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+RemoveIPC=true
+SystemCallArchitectures=native
+
+# Capabilities
+{% if not grafana_alloy_run_as_root %}
+AmbientCapabilities={% for cap in grafana_alloy_capabilities %}CAP_{{ cap | upper }}{% if not loop.last %} {% endif %}{% endfor %}
+
+CapabilityBoundingSet={% for cap in grafana_alloy_capabilities %}CAP_{{ cap | upper }}{% if not loop.last %} {% endif %}{% endfor %}
+
+{% endif %}
+
+# Resource limits
+LimitNOFILE=65536
+{% if grafana_alloy_max_memory_limit %}
+MemoryMax={{ grafana_alloy_max_memory_limit }}
+{% endif %}
+
+# Environment
+Environment="HOME={{ grafana_alloy_home }}"
+Environment="ALLOY_CONFIG_FILE={{ grafana_alloy_config_file }}"
+Environment="ALLOY_DATA_DIR={{ grafana_alloy_data_dir }}"
+Environment="ALLOY_LOG_DIR={{ grafana_alloy_log_dir }}"
+{% if grafana_alloy_memory_ballast_size %}
+Environment="GOMEMLIMIT={{ grafana_alloy_memory_ballast_size }}"
+{% endif %}
+
+# Working directory
+WorkingDirectory={{ grafana_alloy_home }}
+
+# Standard output and error
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=alloy
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,174 @@
+#!/bin/bash
+# Custom metrics collection script for Grafana Alloy
+# This script generates metrics in Prometheus format for the textfile collector
+
+# Set strict error handling
+set -euo pipefail
+
+# Configuration
+HOSTNAME="{{ ansible_hostname }}"
+TIMESTAMP=$(date +%s)
+METRIC_PREFIX="custom"
+
+# Function to output metrics in Prometheus format
+output_metric() {
+    local metric_name="$1"
+    local metric_value="$2"
+    local metric_type="${3:-gauge}"
+    local labels="${4:-}"
+
+    if [ -n "$labels" ]; then
+        echo "# TYPE ${metric_name} ${metric_type}"
+        echo "${metric_name}{hostname=\"${HOSTNAME}\",${labels}} ${metric_value} ${TIMESTAMP}000"
+    else
+        echo "# TYPE ${metric_name} ${metric_type}"
+        echo "${metric_name}{hostname=\"${HOSTNAME}\"} ${metric_value} ${TIMESTAMP}000"
+    fi
+}
+
+# System uptime in seconds
+UPTIME=$(awk '{print int($1)}' /proc/uptime 2>/dev/null || echo "0")
+output_metric "${METRIC_PREFIX}_system_uptime_seconds" "$UPTIME" "counter"
+
+# Number of logged in users
+LOGGED_USERS=$(who | wc -l 2>/dev/null || echo "0")
+output_metric "${METRIC_PREFIX}_logged_users_total" "$LOGGED_USERS" "gauge"
+
+# System load averages
+if [ -f /proc/loadavg ]; then
+    LOAD_1=$(awk '{print $1}' /proc/loadavg)
+    LOAD_5=$(awk '{print $2}' /proc/loadavg)
+    LOAD_15=$(awk '{print $3}' /proc/loadavg)
+
+    output_metric "${METRIC_PREFIX}_load_average" "$LOAD_1" "gauge" "period=\"1m\""
+    output_metric "${METRIC_PREFIX}_load_average" "$LOAD_5" "gauge" "period=\"5m\""
+    output_metric "${METRIC_PREFIX}_load_average" "$LOAD_15" "gauge" "period=\"15m\""
+fi
+
+# Memory usage from /proc/meminfo
+if [ -f /proc/meminfo ]; then
+    TOTAL_MEM=$(awk '/MemTotal:/ {print $2}' /proc/meminfo | head -1)
+    FREE_MEM=$(awk '/MemFree:/ {print $2}' /proc/meminfo | head -1)
+    AVAILABLE_MEM=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo | head -1)
+    BUFFERS=$(awk '/Buffers:/ {print $2}' /proc/meminfo | head -1)
+    CACHED=$(awk '/^Cached:/ {print $2}' /proc/meminfo | head -1)
+
+    if [ -n "$TOTAL_MEM" ] && [ -n "$FREE_MEM" ]; then
+        USED_MEM=$((TOTAL_MEM - FREE_MEM))
+        USED_PERCENT=$((USED_MEM * 100 / TOTAL_MEM))
+
+        output_metric "${METRIC_PREFIX}_memory_usage_bytes" "$((USED_MEM * 1024))" "gauge" "type=\"used\""
+        output_metric "${METRIC_PREFIX}_memory_usage_bytes" "$((FREE_MEM * 1024))" "gauge" "type=\"free\""
+        output_metric "${METRIC_PREFIX}_memory_usage_percent" "$USED_PERCENT" "gauge"
+
+        if [ -n "$AVAILABLE_MEM" ]; then
+            output_metric "${METRIC_PREFIX}_memory_usage_bytes" "$((AVAILABLE_MEM * 1024))" "gauge" "type=\"available\""
+        fi
+
+        if [ -n "$BUFFERS" ]; then
+            output_metric "${METRIC_PREFIX}_memory_usage_bytes" "$((BUFFERS * 1024))" "gauge" "type=\"buffers\""
+        fi
+
+        if [ -n "$CACHED" ]; then
+            output_metric "${METRIC_PREFIX}_memory_usage_bytes" "$((CACHED * 1024))" "gauge" "type=\"cached\""
+        fi
+    fi
+fi
+
+# Disk usage for root filesystem
+ROOT_DISK_USAGE=$(df / | awk 'NR==2 {print $5}' | sed 's/%//' 2>/dev/null || echo "0")
+output_metric "${METRIC_PREFIX}_disk_usage_percent" "$ROOT_DISK_USAGE" "gauge" "mount=\"/\""
+
+# Network interface statistics
+if [ -f /proc/net/dev ]; then
+    while IFS=: read -r interface stats; do
+        # Skip header lines and loopback
+        if [[ "$interface" =~ ^[[:space:]]*[a-zA-Z] ]] && [[ ! "$interface" =~ lo ]]; then
+            interface=$(echo "$interface" | tr -d '[:space:]')
+            read -r rx_bytes rx_packets rx_errs rx_drop _ _ _ _ tx_bytes tx_packets tx_errs tx_drop _ _ _ _ <<< "$stats"
+
+            output_metric "${METRIC_PREFIX}_network_bytes_total" "$rx_bytes" "counter" "device=\"${interface}\",direction=\"rx\""
+            output_metric "${METRIC_PREFIX}_network_bytes_total" "$tx_bytes" "counter" "device=\"${interface}\",direction=\"tx\""
+            output_metric "${METRIC_PREFIX}_network_packets_total" "$rx_packets" "counter" "device=\"${interface}\",direction=\"rx\""
+            output_metric "${METRIC_PREFIX}_network_packets_total" "$tx_packets" "counter" "device=\"${interface}\",direction=\"tx\""
+            output_metric "${METRIC_PREFIX}_network_errors_total" "$rx_errs" "counter" "device=\"${interface}\",direction=\"rx\""
+            output_metric "${METRIC_PREFIX}_network_errors_total" "$tx_errs" "counter" "device=\"${interface}\",direction=\"tx\""
+        fi
+    done < /proc/net/dev
+fi
+
+# Process count
+TOTAL_PROCESSES=$(ps aux | wc -l 2>/dev/null || echo "0")
+output_metric "${METRIC_PREFIX}_processes_total" "$TOTAL_PROCESSES" "gauge"
+
+# Running processes
+RUNNING_PROCESSES=$(ps aux | awk '$8 ~ /^R/ {count++} END {print count+0}' 2>/dev/null || echo "0")
+output_metric "${METRIC_PREFIX}_processes_running" "$RUNNING_PROCESSES" "gauge"
+
+# Sleeping processes
+SLEEPING_PROCESSES=$(ps aux | awk '$8 ~ /^S/ {count++} END {print count+0}' 2>/dev/null || echo "0")
+output_metric "${METRIC_PREFIX}_processes_sleeping" "$SLEEPING_PROCESSES" "gauge"
+
+# TCP connection states
+if command -v ss >/dev/null 2>&1; then
+    ESTABLISHED=$(ss -t state established 2>/dev/null | wc -l || echo "0")
+    LISTEN=$(ss -t state listening 2>/dev/null | wc -l || echo "0")
+    TIME_WAIT=$(ss -t state time-wait 2>/dev/null | wc -l || echo "0")
+
+    output_metric "${METRIC_PREFIX}_tcp_connections" "$ESTABLISHED" "gauge" "state=\"established\""
+    output_metric "${METRIC_PREFIX}_tcp_connections" "$LISTEN" "gauge" "state=\"listening\""
+    output_metric "${METRIC_PREFIX}_tcp_connections" "$TIME_WAIT" "gauge" "state=\"time_wait\""
+fi
+
+# File descriptor usage
+if [ -f /proc/sys/fs/file-nr ]; then
+    FD_ALLOCATED=$(awk '{print $1}' /proc/sys/fs/file-nr)
+    FD_UNUSED=$(awk '{print $2}' /proc/sys/fs/file-nr)
+    FD_MAX=$(awk '{print $3}' /proc/sys/fs/file-nr)
+
+    output_metric "${METRIC_PREFIX}_file_descriptors_allocated" "$FD_ALLOCATED" "gauge"
+    output_metric "${METRIC_PREFIX}_file_descriptors_unused" "$FD_UNUSED" "gauge"
+    output_metric "${METRIC_PREFIX}_file_descriptors_max" "$FD_MAX" "gauge"
+fi
+
+# Docker container count (if Docker is available)
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    RUNNING_CONTAINERS=$(docker ps -q 2>/dev/null | wc -l || echo "0")
+    ALL_CONTAINERS=$(docker ps -aq 2>/dev/null | wc -l || echo "0")
+    DOCKER_IMAGES=$(docker images -q 2>/dev/null | wc -l || echo "0")
+
+    output_metric "${METRIC_PREFIX}_docker_containers" "$RUNNING_CONTAINERS" "gauge" "state=\"running\""
+    output_metric "${METRIC_PREFIX}_docker_containers" "$ALL_CONTAINERS" "gauge" "state=\"total\""
+    output_metric "${METRIC_PREFIX}_docker_images_total" "$DOCKER_IMAGES" "gauge"
+fi
+
+# Systemd service status (common services)
+if command -v systemctl >/dev/null 2>&1; then
+    SERVICES=("ssh" "nginx" "apache2" "docker" "mysql" "postgresql" "redis" "mongodb")
+
+    for service in "${SERVICES[@]}"; do
+        if systemctl list-unit-files "${service}.service" >/dev/null 2>&1; then
+            if systemctl is-active "${service}.service" >/dev/null 2>&1; then
+                output_metric "${METRIC_PREFIX}_service_active" "1" "gauge" "service=\"${service}\""
+            else
+                output_metric "${METRIC_PREFIX}_service_active" "0" "gauge" "service=\"${service}\""
+            fi
+
+            if systemctl is-enabled "${service}.service" >/dev/null 2>&1; then
+                output_metric "${METRIC_PREFIX}_service_enabled" "1" "gauge" "service=\"${service}\""
+            else
+                output_metric "${METRIC_PREFIX}_service_enabled" "0" "gauge" "service=\"${service}\""
+            fi
+        fi
+    done
+fi
+
+# Last successful run timestamp
+output_metric "${METRIC_PREFIX}_last_run_timestamp_seconds" "$TIMESTAMP" "gauge"
+output_metric "${METRIC_PREFIX}_last_run_success" "1" "gauge"
+
+# Script execution time (basic measurement)
+SCRIPT_START_TIME=$(date +%s.%N)
+SCRIPT_END_TIME=$(date +%s.%N)
+EXECUTION_TIME=$(echo "$SCRIPT_END_TIME - $SCRIPT_START_TIME" | bc -l 2>/dev/null || echo "0")
+output_metric "${METRIC_PREFIX}_collection_duration_seconds" "$EXECUTION_TIME" "gauge"

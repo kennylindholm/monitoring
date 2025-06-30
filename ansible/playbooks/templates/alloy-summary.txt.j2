@@ -1,0 +1,149 @@
+================================================================================
+                        GRAFANA ALLOY DEPLOYMENT SUMMARY
+================================================================================
+
+Deployment Information:
+  Hostname: {{ ansible_hostname }}
+  IP Address: {{ ansible_default_ipv4.address }}
+  Deployment Date: {{ deployment_date }}
+  Alloy Version: {{ grafana_alloy_version }}
+
+Service Configuration:
+  Service Name: alloy
+  User: {{ grafana_alloy_user }}
+  Group: {{ grafana_alloy_group }}
+  Status: {{ alloy_service_result.status.ActiveState | default('Unknown') }}
+
+Installation Paths:
+  Binary: {{ grafana_alloy_bin_path }}
+  Configuration: {{ grafana_alloy_config_file }}
+  Data Directory: {{ grafana_alloy_data_dir }}
+  Log Directory: {{ grafana_alloy_log_dir }}
+
+Network Configuration:
+  HTTP Port: {{ grafana_alloy_server_http_listen_port }}
+  GRPC Port: {{ grafana_alloy_server_grpc_listen_port }}
+  Listen Address: {{ grafana_alloy_server_address }}
+
+Access URLs:
+  Web UI: http://{{ ansible_default_ipv4.address }}:{{ grafana_alloy_server_http_listen_port }}
+  Metrics: http://{{ ansible_default_ipv4.address }}:{{ grafana_alloy_server_http_listen_port }}/metrics
+  Ready Check: http://{{ ansible_default_ipv4.address }}:{{ grafana_alloy_server_http_listen_port }}/-/ready
+  Configuration: http://{{ ansible_default_ipv4.address }}:{{ grafana_alloy_server_http_listen_port }}/-/config
+
+Data Forwarding:
+  Prometheus Remote Write: {{ grafana_alloy_prometheus_remote_write_url }}
+  Loki Push: {{ grafana_alloy_loki_url }}
+
+Enabled Features:
+  Node Exporter Metrics: {{ grafana_alloy_node_exporter_enabled | ternary('✓', '✗') }}
+  Docker Metrics: {{ grafana_alloy_docker_enabled | ternary('✓', '✗') }}
+  cAdvisor Metrics: {{ grafana_alloy_cadvisor_enabled | ternary('✓', '✗') }}
+  Log Collection: {{ grafana_alloy_loki_enabled | ternary('✓', '✗') }}
+  Docker Logs: {{ grafana_alloy_docker_logs_enabled | ternary('✓', '✗') }}
+  Kubernetes Logs: {{ grafana_alloy_kubernetes_logs_enabled | ternary('✓', '✗') }}
+  Clustering: {{ grafana_alloy_clustering_enabled | ternary('✓', '✗') }}
+  Tracing: {{ grafana_alloy_tracing_enabled | ternary('✓', '✗') }}
+
+Default Log Sources:
+{% for log in grafana_alloy_default_logs %}
+{% if log.enabled %}
+  - {{ log.name }}: {{ log.type | title }} ({{ log.path | default('systemd journal') }})
+{% endif %}
+{% endfor %}
+
+{% if grafana_alloy_custom_logs %}
+Custom Log Sources:
+{% for log in grafana_alloy_custom_logs %}
+{% if log.enabled %}
+  - {{ log.name }}: {{ log.type | title }} ({{ log.path }})
+{% endif %}
+{% endfor %}
+{% endif %}
+
+External Labels:
+{% for key, value in grafana_alloy_prometheus_external_labels.items() %}
+  {{ key }}: {{ value }}
+{% endfor %}
+{% for key, value in grafana_alloy_additional_external_labels.items() %}
+  {{ key }}: {{ value }}
+{% endfor %}
+
+Node Exporter Collectors:
+{% for collector in grafana_alloy_node_exporter_enabled_collectors %}
+  - {{ collector }}
+{% endfor %}
+
+Management Commands:
+  Check Status: sudo systemctl status alloy
+  View Logs: sudo journalctl -u alloy -f
+  Restart Service: sudo systemctl restart alloy
+  Reload Service: sudo systemctl reload alloy
+  Validate Config: {{ grafana_alloy_bin_path }} fmt {{ grafana_alloy_config_file }}
+  Test Config: {{ grafana_alloy_bin_path }} run {{ grafana_alloy_config_file }} --dry-run
+
+Configuration Files:
+  Main Config: {{ grafana_alloy_config_file }}
+  Service File: /etc/systemd/system/alloy.service
+  Custom Metrics: {{ grafana_alloy_data_dir }}/custom_metrics.sh
+  Textfile Directory: {{ grafana_alloy_data_dir }}/textfile_collector
+
+Security Settings:
+  Run as Root: {{ grafana_alloy_run_as_root | ternary('Yes', 'No') }}
+  Capabilities: {{ grafana_alloy_capabilities | join(', ') }}
+  Firewall Enabled: {{ grafana_alloy_firewall_enabled | ternary('Yes', 'No') }}
+
+Resource Limits:
+  Memory Ballast: {{ grafana_alloy_memory_ballast_size }}
+  Max Memory: {{ grafana_alloy_max_memory_limit }}
+
+Troubleshooting:
+  If service fails to start:
+    1. Check logs: sudo journalctl -u alloy -f
+    2. Validate config: {{ grafana_alloy_bin_path }} fmt {{ grafana_alloy_config_file }}
+    3. Test config: {{ grafana_alloy_bin_path }} run {{ grafana_alloy_config_file }} --dry-run
+    4. Check permissions on data directory: ls -la {{ grafana_alloy_data_dir }}
+
+  If metrics/logs not appearing:
+    1. Check connectivity to Prometheus/Loki endpoints
+    2. Verify external labels and configuration
+    3. Check Alloy web UI for component status
+    4. Review logs for error messages
+
+Configuration Examples:
+  To enable Docker metrics on this host, add to host_vars/{{ inventory_hostname }}.yml:
+    grafana_alloy_docker_enabled: true
+    grafana_alloy_docker_host: "unix:///var/run/docker.sock"
+
+  To enable cAdvisor metrics on this host:
+    grafana_alloy_cadvisor_enabled: true
+    grafana_alloy_cadvisor_url: "http://localhost:8080"
+
+  To add custom logs:
+    grafana_alloy_custom_logs:
+      - name: "nginx_access"
+        enabled: true
+        type: "file"
+        path: "/var/log/nginx/access.log"
+        labels:
+          job: "nginx"
+          service: "nginx"
+          log_type: "access"
+
+  To enable Docker logs:
+    grafana_alloy_docker_logs_enabled: true
+
+================================================================================
+                             DEPLOYMENT COMPLETE
+================================================================================
+
+Next Steps:
+1. Access Grafana at: http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:3000
+2. Verify metrics in Prometheus dashboard
+3. Check logs in Loki/Grafana Explore
+4. Configure custom dashboards and alerts as needed
+5. Set up additional log sources if required
+
+For more information, visit: https://grafana.com/docs/alloy/
+
+================================================================================

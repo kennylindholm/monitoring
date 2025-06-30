@@ -1,0 +1,222 @@
+---
+# Grafana Alloy default variables
+
+# Version and download settings
+grafana_alloy_version: "v1.0.0"
+grafana_alloy_arch_map:
+  x86_64: "amd64"
+  aarch64: "arm64"
+  armv7l: "armv7"
+
+# System user and group
+grafana_alloy_user: "alloy"
+grafana_alloy_group: "alloy"
+grafana_alloy_shell: "/bin/false"
+grafana_alloy_home: "/var/lib/alloy"
+
+# Installation paths
+grafana_alloy_bin_path: "/usr/local/bin/alloy"
+grafana_alloy_config_dir: "/etc/alloy"
+grafana_alloy_config_file: "{{ grafana_alloy_config_dir }}/config.alloy"
+grafana_alloy_data_dir: "/var/lib/alloy"
+grafana_alloy_log_dir: "/var/log/alloy"
+grafana_alloy_temp_dir: "/tmp"
+
+# Download URL
+grafana_alloy_download_url: "https://github.com/grafana/alloy/releases/download/{{ grafana_alloy_version }}/alloy-linux-{{ grafana_alloy_arch_map[ansible_architecture] }}.zip"
+
+# Service configuration
+grafana_alloy_service_enabled: true
+grafana_alloy_service_state: "started"
+
+# Server configuration
+grafana_alloy_server_log_level: "info"
+grafana_alloy_server_http_listen_port: 12345
+grafana_alloy_server_grpc_listen_port: 12346
+grafana_alloy_server_address: "0.0.0.0"
+
+# Clustering configuration (disabled by default)
+grafana_alloy_clustering_enabled: false
+grafana_alloy_clustering_peers: []
+
+# Prometheus configuration
+grafana_alloy_prometheus_enabled: true
+grafana_alloy_prometheus_scrape_interval: "15s"
+grafana_alloy_prometheus_external_labels:
+  cluster: "monitoring"
+  replica: "{{ ansible_hostname }}"
+
+# Remote write configuration for Prometheus
+grafana_alloy_prometheus_remote_write_url: "http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:9090/api/v1/write"
+grafana_alloy_prometheus_remote_write_enabled: true
+
+# Node exporter metrics (built-in)
+grafana_alloy_node_exporter_enabled: true
+grafana_alloy_node_exporter_instance: "{{ ansible_hostname }}"
+grafana_alloy_node_exporter_scrape_interval: "15s"
+
+# Enabled collectors for node exporter
+grafana_alloy_node_exporter_enabled_collectors:
+  - arp
+  - bcache
+  - conntrack
+  - cpu
+  - cpufreq
+  - diskstats
+  - entropy
+  - filefd
+  - filesystem
+  - hwmon
+  - loadavg
+  - meminfo
+  - netdev
+  - netstat
+  - sockstat
+  - stat
+  - textfile
+  - time
+  - timex
+  - uname
+  - vmstat
+
+# Filesystem collector configuration
+grafana_alloy_node_exporter_filesystem_ignored_mount_points: "^/(dev|proc|sys|var/lib/docker/.+)($|/)"
+grafana_alloy_node_exporter_filesystem_ignored_fs_types: "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
+
+# Docker metrics configuration (per-host configurable)
+grafana_alloy_docker_enabled: false
+grafana_alloy_docker_host: "unix:///var/run/docker.sock"
+grafana_alloy_docker_scrape_interval: "15s"
+
+# cAdvisor metrics configuration (per-host configurable)
+grafana_alloy_cadvisor_enabled: false
+grafana_alloy_cadvisor_url: "http://localhost:8080"
+grafana_alloy_cadvisor_scrape_interval: "15s"
+
+# Loki configuration
+grafana_alloy_loki_enabled: true
+grafana_alloy_loki_url: "http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:3100/loki/api/v1/push"
+grafana_alloy_loki_batch_wait: "1s"
+grafana_alloy_loki_batch_size: 1048576
+
+# Default log configurations - these are always enabled
+grafana_alloy_default_logs:
+  - name: "systemd_journal"
+    enabled: true
+    type: "systemd"
+    max_age: "12h"
+    labels:
+      job: "systemd-journal"
+      hostname: "{{ ansible_hostname }}"
+
+  - name: "syslog"
+    enabled: true
+    type: "file"
+    path: "/var/log/syslog"
+    labels:
+      job: "syslog"
+      hostname: "{{ ansible_hostname }}"
+      service: "syslog"
+
+  - name: "auth"
+    enabled: true
+    type: "file"
+    path: "/var/log/auth.log"
+    labels:
+      job: "auth"
+      hostname: "{{ ansible_hostname }}"
+      service: "auth"
+
+# Host-specific log configurations - can be overridden in host_vars
+grafana_alloy_custom_logs: []
+# Example:
+# grafana_alloy_custom_logs:
+#   - name: "nginx_access"
+#     enabled: true
+#     type: "file"
+#     path: "/var/log/nginx/access.log"
+#     labels:
+#       job: "nginx"
+#       hostname: "{{ ansible_hostname }}"
+#       service: "nginx"
+#       log_type: "access"
+#     multiline:
+#       firstline: '^\[\d{4}-\d{2}-\d{2}'
+#
+#   - name: "application_logs"
+#     enabled: true
+#     type: "file"
+#     path: "/var/log/myapp/*.log"
+#     labels:
+#       job: "myapp"
+#       hostname: "{{ ansible_hostname }}"
+#       service: "myapp"
+
+# Docker log configuration (per-host configurable)
+grafana_alloy_docker_logs_enabled: false
+grafana_alloy_docker_logs_path: "/var/lib/docker/containers/*/*-json.log"
+grafana_alloy_docker_logs_labels:
+  job: "docker"
+  hostname: "{{ ansible_hostname }}"
+
+# Kubernetes log configuration (per-host configurable)
+grafana_alloy_kubernetes_logs_enabled: false
+grafana_alloy_kubernetes_logs_path: "/var/log/pods/*/*/*.log"
+grafana_alloy_kubernetes_logs_labels:
+  job: "kubernetes"
+  hostname: "{{ ansible_hostname }}"
+
+# Additional external labels
+grafana_alloy_additional_external_labels: {}
+
+# Firewall configuration
+grafana_alloy_firewall_enabled: false
+grafana_alloy_firewall_zone: "public"
+
+# Cleanup downloaded files after installation
+grafana_alloy_cleanup_downloads: true
+
+# Validate configuration before starting
+grafana_alloy_validate_config: true
+
+# Memory and performance settings
+grafana_alloy_memory_ballast_size: "64MiB"
+grafana_alloy_max_memory_limit: "512MiB"
+
+# Tracing configuration (optional)
+grafana_alloy_tracing_enabled: false
+grafana_alloy_tracing_endpoint: ""
+
+# Profiling configuration (optional)
+grafana_alloy_profiling_enabled: false
+grafana_alloy_profiling_path: "/debug/pprof"
+
+# Feature flags
+grafana_alloy_feature_flags: []
+
+# Custom components (advanced configuration)
+grafana_alloy_custom_components: []
+
+# Log format configuration
+grafana_alloy_log_format: "logfmt"  # Options: logfmt, json
+
+# Stability level
+grafana_alloy_stability_level: "stable"  # Options: stable, beta, experimental
+
+# UI configuration
+grafana_alloy_ui_enabled: true
+grafana_alloy_ui_path_prefix: ""
+
+# Security settings
+grafana_alloy_run_as_root: false
+grafana_alloy_capabilities:
+  - "dac_read_search"
+  - "sys_ptrace"
+
+# Configuration validation
+grafana_alloy_config_validation_enabled: true
+grafana_alloy_config_syntax_check: true
+
+# Backup configuration
+grafana_alloy_backup_enabled: false
+grafana_alloy_backup_retention_days: 7

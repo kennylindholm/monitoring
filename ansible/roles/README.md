@@ -13,12 +13,11 @@ This directory contains individual Ansible roles for deploying a complete monito
 
 ### Exporters
 
-- **node-exporter** - System and hardware metrics exporter (Port: 9100)
 - **cadvisor** - Container metrics exporter (Port: 8080)
 
-### Collectors
+### Unified Agents
 
-- **promtail** - Log collector and forwarder for Loki (Port: 9080)
+- **grafana-agent** - Unified metrics and logs collection agent (Port: 12345)
 
 ### Supporting Roles
 
@@ -62,9 +61,8 @@ You can use individual roles in your playbook:
     - grafana
     - loki
     - alertmanager
-    - node-exporter
+    - grafana-agent
     - cadvisor
-    - promtail
 ```
 
 ### Using Multiple Roles
@@ -172,13 +170,6 @@ alertmanager_slack_enabled: false
 alertmanager_image: "prom/alertmanager:latest"
 ```
 
-#### Node Exporter (Port: 9100)
-
-```yaml
-node_exporter_port: 9100
-node_exporter_log_level: "info"
-```
-
 #### cAdvisor (Port: 8080)
 
 ```yaml
@@ -186,26 +177,26 @@ cadvisor_port: 8080
 cadvisor_docker_only: true
 ```
 
-#### Promtail (Port: 9080)
+#### Grafana Agent (Port: 12345)
 
 ```yaml
-promtail_port: 9080
-promtail_loki_url: "http://loki:3100"
+grafana_agent_server_http_listen_port: 12345
+grafana_agent_prometheus_remote_write_url: "http://prometheus:9090/api/v1/write"
+grafana_agent_loki_url: "http://loki:3100/loki/api/v1/push"
 ```
 
 ## Port Usage
 
 The monitoring stack uses the following ports:
 
-| Service       | Port | Protocol | Purpose                   |
-| ------------- | ---- | -------- | ------------------------- |
-| Prometheus    | 9090 | HTTP     | Web UI and API            |
-| Grafana       | 3000 | HTTP     | Web UI                    |
-| Loki          | 3100 | HTTP     | Log ingestion and queries |
-| Alertmanager  | 9093 | HTTP     | Web UI and API            |
-| Node Exporter | 9100 | HTTP     | Metrics endpoint          |
-| cAdvisor      | 8080 | HTTP     | Container metrics         |
-| Promtail      | 9080 | HTTP     | Health and targets API    |
+| Service       | Port  | Protocol | Purpose                   |
+| ------------- | ----- | -------- | ------------------------- |
+| Prometheus    | 9090  | HTTP     | Web UI and API            |
+| Grafana       | 3000  | HTTP     | Web UI                    |
+| Loki          | 3100  | HTTP     | Log ingestion and queries |
+| Alertmanager  | 9093  | HTTP     | Web UI and API            |
+| cAdvisor      | 8080  | HTTP     | Container metrics         |
+| Grafana Agent | 12345 | HTTP     | Metrics, logs, and web UI |
 
 **Note**: Ensure these ports are available and not conflicting with other services on your hosts.
 
@@ -226,7 +217,7 @@ The roles have the following dependencies:
 - All roles depend on `monitoring-common`
 - `grafana` depends on `prometheus` and `loki` for data sources
 - `prometheus` works with `alertmanager` for alerting
-- `promtail` requires `loki` for log forwarding
+- `grafana-agent` requires `prometheus` and `loki` for data forwarding
 
 ## Examples
 

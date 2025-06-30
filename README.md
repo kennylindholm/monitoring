@@ -10,13 +10,13 @@ This monitoring stack provides:
 - **Grafana** - Visualization and dashboards
 - **Loki** - Log aggregation and querying
 - **Alertmanager** - Alert routing and management
-- **Node Exporter** - System metrics collection
 - **cAdvisor** - Container metrics collection
-- **Promtail** - Log collection and forwarding
+- **Grafana Agent** - Unified metrics and logs collection (replaces Node Exporter + Promtail)
 
 ## Quick Start
 
 1. **Setup inventory**:
+
    ```bash
    cd ansible
    cp inventory.example inventory
@@ -24,11 +24,13 @@ This monitoring stack provides:
    ```
 
 2. **Install Docker**:
+
    ```bash
    make docker-install
    ```
 
 3. **Deploy monitoring stack**:
+
    ```bash
    make deploy-prometheus
    make deploy-grafana
@@ -38,25 +40,25 @@ This monitoring stack provides:
 
 4. **Deploy exporters**:
    ```bash
-   make deploy-node-exporter
    make deploy-cadvisor
-   make deploy-promtail
+   make deploy-grafana-agent    # Unified agent for metrics and logs
    ```
 
 ## Available Commands
 
 ### Deployment
+
 ```bash
 make deploy-prometheus      # Deploy Prometheus
 make deploy-grafana         # Deploy Grafana
 make deploy-loki           # Deploy Loki
 make deploy-alertmanager   # Deploy Alertmanager
-make deploy-node-exporter  # Deploy Node Exporter
 make deploy-cadvisor       # Deploy cAdvisor
-make deploy-promtail       # Deploy Promtail
+make deploy-grafana-agent  # Deploy Grafana Agent (unified metrics and logs)
 ```
 
 ### Management
+
 ```bash
 make monitoring-status     # Check service status
 make monitoring-logs       # View service logs
@@ -68,6 +70,7 @@ make monitoring-urls       # Show service URLs
 ```
 
 ### Individual Service Management
+
 ```bash
 make restart-prometheus    # Restart Prometheus
 make restart-grafana      # Restart Grafana
@@ -82,8 +85,9 @@ make restart-alertmanager # Restart Alertmanager
 To update Grafana to a new version:
 
 1. **Edit the version** in `ansible/roles/grafana/vars/main.yml`:
+
    ```yaml
-   grafana_image: "grafana/grafana:12.0.3"  # Change to desired version
+   grafana_image: "grafana/grafana:12.0.3" # Change to desired version
    ```
 
 2. **Deploy the update**:
@@ -92,6 +96,7 @@ To update Grafana to a new version:
    ```
 
 The deployment will automatically:
+
 - Pull the new image
 - Recreate the container with the new version
 - Preserve your data and configuration
@@ -102,28 +107,34 @@ The deployment will automatically:
 The same process applies to other components:
 
 #### Prometheus
+
 ```yaml
 # In ansible/roles/prometheus/vars/main.yml
 prometheus_image: "prom/prometheus:v2.45.0"
 ```
+
 ```bash
 make deploy-prometheus
 ```
 
 #### Loki
+
 ```yaml
 # In ansible/roles/loki/vars/main.yml
 loki_image: "grafana/loki:2.9.0"
 ```
+
 ```bash
 make deploy-loki
 ```
 
 #### Alertmanager
+
 ```yaml
 # In ansible/roles/alertmanager/vars/main.yml
 alertmanager_image: "prom/alertmanager:v0.25.0"
 ```
+
 ```bash
 make deploy-alertmanager
 ```
@@ -143,16 +154,19 @@ When you run a deployment after changing the image version:
 If an update fails:
 
 1. **Check logs**:
+
    ```bash
    make monitoring-logs SERVICE=grafana
    ```
 
 2. **Verify image exists**:
+
    ```bash
    docker pull grafana/grafana:12.0.3
    ```
 
 3. **Manual container recreation**:
+
    ```bash
    # Stop current container
    make monitoring-stop
@@ -170,6 +184,7 @@ If an update fails:
 ### Best Practices for Updates
 
 1. **Backup First**: Always backup your data before major updates
+
    ```bash
    make monitoring-backup
    ```
@@ -179,6 +194,7 @@ If an update fails:
 3. **Read Release Notes**: Check component release notes for breaking changes
 
 4. **Monitor After Update**: Watch logs and metrics after updating
+
    ```bash
    make monitoring-health
    make monitoring-logs
@@ -189,19 +205,22 @@ If an update fails:
 ## Configuration
 
 ### Default Ports
+
 - Prometheus: 9090
 - Grafana: 3000
 - Loki: 3100
 - Alertmanager: 9093
-- Node Exporter: 9100
 - cAdvisor: 8080
-- Promtail: 9080
+- Grafana Agent: 12345
 
 ### Default Credentials
+
 - **Grafana**: admin / admin123 (change in `ansible/roles/grafana/vars/main.yml`)
 
 ### Data Persistence
+
 All data is stored in `/opt/monitoring/` on the target servers:
+
 - Prometheus data: `/opt/monitoring/prometheus/data`
 - Grafana data: `/opt/monitoring/grafana/data`
 - Loki data: `/opt/monitoring/loki/data`
@@ -229,11 +248,13 @@ After deployment, access your monitoring stack:
 ## Backup and Recovery
 
 ### Create Backup
+
 ```bash
 make monitoring-backup
 ```
 
 ### Manual Backup
+
 ```bash
 # Backup all monitoring data
 ansible monitoring_servers -m archive -a "path=/opt/monitoring dest=/tmp/monitoring-backup-$(date +%Y%m%d).tar.gz" --become
@@ -244,18 +265,21 @@ ansible monitoring_servers -m archive -a "path=/opt/monitoring dest=/tmp/monitor
 ### Common Issues
 
 1. **Services not starting**:
+
    ```bash
    make monitoring-status
    make monitoring-logs
    ```
 
 2. **Port conflicts**:
+
    ```bash
    # Check what's using the port
    ansible monitoring_servers -m shell -a "netstat -tulpn | grep :3000" --become
    ```
 
 3. **Permission issues**:
+
    ```bash
    # Fix permissions
    ansible monitoring_servers -m shell -a "chown -R 472:0 /opt/monitoring/grafana/data" --become
@@ -276,6 +300,7 @@ ansible monitoring_servers -m archive -a "path=/opt/monitoring dest=/tmp/monitor
 ## Development
 
 ### Project Structure
+
 ```
 monitoring/
 ├── ansible/

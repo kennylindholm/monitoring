@@ -34,11 +34,11 @@ scrape_configs:
     static_configs:
       - targets: ["loki:3100"]
 
-  - job_name: "promtail"
+  - job_name: "grafana-agent"
     static_configs:
       - targets:
-          - "192.168.122.31:9080"
-          - "192.168.122.94:9080"
+          - "192.168.122.31:12345"
+          - "192.168.122.94:12345"
     relabel_configs:
       - source_labels: [__address__]
         regex: "([^:]+):.*"

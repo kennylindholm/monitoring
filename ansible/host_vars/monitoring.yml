@@ -1,0 +1,141 @@
+---
+# Host-specific configuration for monitoring server
+# This host runs both monitoring services and acts as a client
+
+# Enable Docker metrics collection since this host runs Docker containers
+grafana_alloy_docker_enabled: true
+grafana_alloy_docker_host: "unix:///var/run/docker.sock"
+grafana_alloy_docker_scrape_interval: "15s"
+
+# Enable cAdvisor metrics collection for container monitoring
+grafana_alloy_cadvisor_enabled: true
+grafana_alloy_cadvisor_url: "http://localhost:8080"
+grafana_alloy_cadvisor_scrape_interval: "15s"
+
+# Enable Docker logs collection
+grafana_alloy_docker_logs_enabled: true
+grafana_alloy_docker_logs_labels:
+  job: "docker"
+  hostname: "monitoring"
+  environment: "production"
+
+# Custom logs specific to this monitoring host
+grafana_alloy_custom_logs:
+  - name: "docker_daemon"
+    enabled: true
+    type: "file"
+    path: "/var/log/docker.log"
+    labels:
+      job: "docker"
+      hostname: "monitoring"
+      service: "docker"
+      log_type: "daemon"
+
+  - name: "prometheus_logs"
+    enabled: true
+    type: "file"
+    path: "/opt/monitoring/prometheus/logs/*.log"
+    labels:
+      job: "prometheus"
+      hostname: "monitoring"
+      service: "prometheus"
+      component: "monitoring"
+
+  - name: "grafana_logs"
+    enabled: true
+    type: "file"
+    path: "/opt/monitoring/grafana/logs/grafana.log"
+    labels:
+      job: "grafana"
+      hostname: "monitoring"
+      service: "grafana"
+      component: "monitoring"
+    regex: "(?P<timestamp>\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.\\d{3}Z)\\s+(?P<level>\\w+)\\s+(?P<logger>[^\\s]+)\\s+(?P<message>.*)"
+    pipeline_labels:
+      level: "level"
+      logger: "logger"
+    timestamp:
+      source: "timestamp"
+      format: "RFC3339"
+
+  - name: "loki_logs"
+    enabled: true
+    type: "file"
+    path: "/opt/monitoring/loki/logs/*.log"
+    labels:
+      job: "loki"
+      hostname: "monitoring"
+      service: "loki"
+      component: "monitoring"
+
+  - name: "nginx_access"
+    enabled: false  # Enable if nginx is used as reverse proxy
+    type: "file"
+    path: "/var/log/nginx/access.log"
+    labels:
+      job: "nginx"
+      hostname: "monitoring"
+      service: "nginx"
+      log_type: "access"
+    regex: "(?P<remote_addr>[\\d\\.]+)\\s+-\\s+(?P<remote_user>\\S+)\\s+\\[(?P<timestamp>[^\\]]+)\\]\\s+\"(?P<method>\\w+)\\s+(?P<path>\\S+)\\s+(?P<protocol>[^\"]+)\"\\s+(?P<status>\\d+)\\s+(?P<body_bytes_sent>\\d+)"
+    pipeline_labels:
+      method: "method"
+      status: "status"
+    timestamp:
+      source: "timestamp"
+      format: "02/Jan/2006:15:04:05 -0700"
+
+# Additional external labels for this host
+grafana_alloy_additional_external_labels:
+  role: "monitoring_server"
+  environment: "production"
+  datacenter: "primary"
+
+# Enhanced security for monitoring server
+grafana_alloy_firewall_enabled: true
+grafana_alloy_firewall_zone: "public"
+
+# Performance tuning for monitoring workload
+grafana_alloy_memory_ballast_size: "128MiB"
+grafana_alloy_max_memory_limit: "1GiB"
+
+# Enable profiling for debugging
+grafana_alloy_profiling_enabled: true
+
+# Enhanced logging
+grafana_alloy_server_log_level: "info"
+grafana_alloy_log_format: "logfmt"
+
+# Feature flags for beta/experimental features
+grafana_alloy_feature_flags:
+  - "enable-service-discovery"
+  - "enable-clustering"
+
+# Stability level
+grafana_alloy_stability_level: "stable"
+
+# Node exporter specific configuration
+grafana_alloy_node_exporter_enabled_collectors:
+  - arp
+  - bcache
+  - conntrack
+  - cpu
+  - cpufreq
+  - diskstats
+  - entropy
+  - filefd
+  - filesystem
+  - hwmon
+  - loadavg
+  - meminfo
+  - netdev
+  - netstat
+  - sockstat
+  - stat
+  - textfile
+  - time
+  - timex
+  - uname
+  - vmstat
+  - systemd
+  - processes

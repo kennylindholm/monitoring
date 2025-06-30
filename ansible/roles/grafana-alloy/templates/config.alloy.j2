@@ -1,0 +1,367 @@
+// Grafana Alloy Configuration
+// This configuration replaces Grafana Agent with the new Alloy syntax
+
+// Logging configuration
+logging {
+	level  = "{{ grafana_alloy_server_log_level }}"
+	format = "{{ grafana_alloy_log_format }}"
+}
+
+// Server configuration
+http {
+	listen_address = "{{ grafana_alloy_server_address }}"
+	listen_port    = {{ grafana_alloy_server_http_listen_port }}
+{% if grafana_alloy_ui_enabled %}
+	enable_pprof   = {{ grafana_alloy_profiling_enabled | lower }}
+{% endif %}
+{% if grafana_alloy_ui_path_prefix %}
+	path_prefix    = "{{ grafana_alloy_ui_path_prefix }}"
+{% endif %}
+}
+
+{% if grafana_alloy_clustering_enabled and grafana_alloy_clustering_peers %}
+// Clustering configuration
+cluster {
+	name = "{{ grafana_alloy_prometheus_external_labels.cluster | default('alloy-cluster') }}"
+{% for peer in grafana_alloy_clustering_peers %}
+	peer "{{ peer }}" {}
+{% endfor %}
+}
+{% endif %}
+
+{% if grafana_alloy_prometheus_enabled %}
+// Prometheus remote write configuration
+prometheus.remote_write "default" {
+	endpoint {
+		url = "{{ grafana_alloy_prometheus_remote_write_url }}"
+
+		queue_config {
+			max_samples_per_send = 1000
+			batch_send_deadline = "5s"
+			min_shards = 1
+			max_shards = 200
+		}
+	}
+
+	external_labels = {
+{% for key, value in grafana_alloy_prometheus_external_labels.items() %}
+		{{ key }} = "{{ value }}",
+{% endfor %}
+{% for key, value in grafana_alloy_additional_external_labels.items() %}
+		{{ key }} = "{{ value }}",
+{% endfor %}
+	}
+}
+{% endif %}
+
+{% if grafana_alloy_node_exporter_enabled %}
+// Node Exporter metrics collection
+prometheus.exporter.unix "node_exporter" {
+	include_exporter_metrics = true
+	disable_collectors       = []
+
+{% for collector in grafana_alloy_node_exporter_enabled_collectors %}
+	enable_collectors = ["{{ collector }}"]
+{% endfor %}
+
+	filesystem {
+		fs_types_exclude     = "{{ grafana_alloy_node_exporter_filesystem_ignored_fs_types }}"
+		mount_points_exclude = "{{ grafana_alloy_node_exporter_filesystem_ignored_mount_points }}"
+	}
+
+	netdev {
+		device_exclude = "^(veth.*|docker.*|br-.*|lo)$"
+	}
+
+	diskstats {
+		device_exclude = "^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$"
+	}
+
+	textfile {
+		directory = "{{ grafana_alloy_data_dir }}/textfile_collector"
+	}
+}
+
+// Scrape node exporter metrics
+prometheus.scrape "node_exporter" {
+	targets    = prometheus.exporter.unix.node_exporter.targets
+	forward_to = [prometheus.remote_write.default.receiver]
+	scrape_interval = "{{ grafana_alloy_node_exporter_scrape_interval }}"
+
+	clustering {
+		enabled = {{ grafana_alloy_clustering_enabled | lower }}
+	}
+}
+{% endif %}
+
+{% if grafana_alloy_docker_enabled %}
+// Docker metrics collection
+prometheus.exporter.docker "docker" {
+	docker_host = "{{ grafana_alloy_docker_host }}"
+}
+
+prometheus.scrape "docker" {
+	targets    = prometheus.exporter.docker.docker.targets
+	forward_to = [prometheus.remote_write.default.receiver]
+	scrape_interval = "{{ grafana_alloy_docker_scrape_interval }}"
+}
+{% endif %}
+
+{% if grafana_alloy_cadvisor_enabled %}
+// cAdvisor metrics scraping
+prometheus.scrape "cadvisor" {
+	targets = [
+		{"__address__" = "{{ grafana_alloy_cadvisor_url | regex_replace('^https?://') }}"},
+	]
+	forward_to = [prometheus.remote_write.default.receiver]
+	scrape_interval = "{{ grafana_alloy_cadvisor_scrape_interval }}"
+	metrics_path = "/metrics"
+}
+{% endif %}
+
+// Self-monitoring
+prometheus.scrape "alloy" {
+	targets = [
+		{"__address__" = "localhost:{{ grafana_alloy_server_http_listen_port }}"},
+	]
+	forward_to = [prometheus.remote_write.default.receiver]
+	scrape_interval = "{{ grafana_alloy_prometheus_scrape_interval }}"
+	metrics_path = "/metrics"
+}
+
+{% if grafana_alloy_loki_enabled %}
+// Loki log forwarding
+loki.write "default" {
+	endpoint {
+		url = "{{ grafana_alloy_loki_url }}"
+
+		batch_config {
+			size    = {{ grafana_alloy_loki_batch_size }}
+			timeout = "{{ grafana_alloy_loki_batch_wait }}"
+		}
+	}
+
+	external_labels = {
+{% for key, value in grafana_alloy_prometheus_external_labels.items() %}
+		{{ key }} = "{{ value }}",
+{% endfor %}
+{% for key, value in grafana_alloy_additional_external_labels.items() %}
+		{{ key }} = "{{ value }}",
+{% endfor %}
+	}
+}
+
+{% for log_config in grafana_alloy_default_logs %}
+{% if log_config.enabled %}
+{% if log_config.type == 'systemd' %}
+// {{ log_config.name }} - systemd journal
+loki.source.journal "{{ log_config.name }}" {
+	max_age    = "{{ log_config.max_age | default('12h') }}"
+	labels     = {
+{% for key, value in log_config.labels.items() %}
+		{{ key }} = "{{ value }}",
+{% endfor %}
+	}
+	forward_to = [loki.write.default.receiver]
+}
+{% elif log_config.type == 'file' %}
+// {{ log_config.name }} - file logs
+loki.source.file "{{ log_config.name }}" {
+	targets = [
+		{__path__ = "{{ log_config.path }}",
+{% for key, value in log_config.labels.items() %}
+		 {{ key }} = "{{ value }}",
+{% endfor %}
+		},
+	]
+	forward_to = [loki.process.{{ log_config.name }}.receiver]
+}
+
+loki.process "{{ log_config.name }}" {
+	forward_to = [loki.write.default.receiver]
+
+	stage.regex {
+		expression = "(?P<timestamp>\\w+\\s+\\d+\\s+\\d+:\\d+:\\d+)\\s+(?P<hostname>\\w+)\\s+(?P<service>[^:]+):\\s*(?P<message>.*)"
+	}
+
+	stage.labels {
+		values = {
+			service = "service",
+		}
+	}
+
+	stage.timestamp {
+		source = "timestamp"
+		format = "Jan 02 15:04:05"
+	}
+}
+{% endif %}
+{% endif %}
+{% endfor %}
+
+{% for log_config in grafana_alloy_custom_logs %}
+{% if log_config.enabled %}
+// {{ log_config.name }} - custom logs
+loki.source.file "{{ log_config.name }}" {
+	targets = [
+		{__path__ = "{{ log_config.path }}",
+{% for key, value in log_config.labels.items() %}
+		 {{ key }} = "{{ value }}",
+{% endfor %}
+		},
+	]
+	forward_to = [loki.process.{{ log_config.name }}.receiver]
+}
+
+loki.process "{{ log_config.name }}" {
+	forward_to = [loki.write.default.receiver]
+
+{% if log_config.multiline is defined %}
+	stage.multiline {
+		firstline     = "{{ log_config.multiline.firstline }}"
+{% if log_config.multiline.max_wait_time is defined %}
+		max_wait_time = "{{ log_config.multiline.max_wait_time }}"
+{% endif %}
+{% if log_config.multiline.max_lines is defined %}
+		max_lines     = {{ log_config.multiline.max_lines }}
+{% endif %}
+	}
+{% endif %}
+
+{% if log_config.regex is defined %}
+	stage.regex {
+		expression = "{{ log_config.regex }}"
+	}
+{% endif %}
+
+{% if log_config.json is defined %}
+	stage.json {
+		expressions = {
+{% for key, value in log_config.json.items() %}
+			{{ key }} = "{{ value }}",
+{% endfor %}
+		}
+	}
+{% endif %}
+
+{% if log_config.pipeline_labels is defined %}
+	stage.labels {
+		values = {
+{% for key, value in log_config.pipeline_labels.items() %}
+			{{ key }} = "{{ value }}",
+{% endfor %}
+		}
+	}
+{% endif %}
+
+{% if log_config.timestamp is defined %}
+	stage.timestamp {
+		source = "{{ log_config.timestamp.source }}"
+		format = "{{ log_config.timestamp.format }}"
+{% if log_config.timestamp.location is defined %}
+		location = "{{ log_config.timestamp.location }}"
+{% endif %}
+	}
+{% endif %}
+}
+{% endif %}
+{% endfor %}
+
+{% if grafana_alloy_docker_logs_enabled %}
+// Docker container logs
+loki.source.docker "docker_logs" {
+	host             = "{{ grafana_alloy_docker_host }}"
+	targets          = []
+	labels           = {
+{% for key, value in grafana_alloy_docker_logs_labels.items() %}
+		{{ key }} = "{{ value }}",
+{% endfor %}
+	}
+	forward_to       = [loki.process.docker_logs.receiver]
+	refresh_interval = "5s"
+}
+
+loki.process "docker_logs" {
+	forward_to = [loki.write.default.receiver]
+
+	stage.json {
+		expressions = {
+			log    = "log",
+			stream = "stream",
+			time   = "time",
+		}
+	}
+
+	stage.labels {
+		values = {
+			stream = "stream",
+		}
+	}
+
+	stage.timestamp {
+		source = "time"
+		format = "RFC3339Nano"
+	}
+
+	stage.output {
+		source = "log"
+	}
+}
+{% endif %}
+
+{% if grafana_alloy_kubernetes_logs_enabled %}
+// Kubernetes pod logs
+loki.source.kubernetes "kubernetes_logs" {
+	targets    = []
+	forward_to = [loki.process.kubernetes_logs.receiver]
+}
+
+loki.process "kubernetes_logs" {
+	forward_to = [loki.write.default.receiver]
+
+	stage.json {
+		expressions = {
+			log       = "log",
+			stream    = "stream",
+			time      = "time",
+			namespace = "kubernetes.namespace_name",
+			pod       = "kubernetes.pod_name",
+			container = "kubernetes.container_name",
+		}
+	}
+
+	stage.labels {
+		values = {
+			namespace = "namespace",
+			pod       = "pod",
+			container = "container",
+			stream    = "stream",
+		}
+	}
+
+	stage.timestamp {
+		source = "time"
+		format = "RFC3339Nano"
+	}
+
+	stage.output {
+		source = "log"
+	}
+}
+{% endif %}
+
+{% endif %}
+
+{% if grafana_alloy_tracing_enabled and grafana_alloy_tracing_endpoint %}
+// Tracing configuration
+tracing {
+	sampling_fraction = 0.1
+	write_to = [otelcol.exporter.otlp.default.input]
+}
+
+otelcol.exporter.otlp "default" {
+	client {
+		endpoint = "{{ grafana_alloy_tracing_endpoint }}"
+	}
+}
+{% endif %}

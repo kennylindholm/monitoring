@@ -226,7 +226,7 @@
 
           Integration Information:
           - Grafana Datasource: Add http://loki:3100 as Loki datasource
-          - Promtail Agent: Deploy on client hosts to ship logs
+          - Grafana Agent: Deploy on client hosts to ship logs
           - Prometheus Scraping: Metrics available at /metrics endpoint
 
           ============================================
@@ -277,8 +277,8 @@
           - Error logs: {job="app"} |= "error"
           - Rate query: rate({job="app"}[5m])
 
-          To send logs via Promtail:
-          Deploy Promtail on client hosts and configure with Loki endpoint
+          To send logs via Grafana Agent:
+          Deploy Grafana Agent on client hosts and configure with Loki endpoint
 
           ============================================
 

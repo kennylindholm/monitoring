@@ -1,0 +1,364 @@
+---
+- name: Deploy Grafana Alloy (replaces Grafana Agent)
+  hosts: client_hosts
+  become: true
+  gather_facts: true
+
+  vars:
+    # Override default variables as needed
+    monitoring_base_dir: /opt/monitoring
+
+    # Grafana Alloy specific configuration
+    grafana_alloy_server_http_listen_port: 12345
+    grafana_alloy_server_grpc_listen_port: 12346
+    grafana_alloy_server_log_level: "info"
+
+    # Prometheus configuration
+    grafana_alloy_prometheus_remote_write_url: "http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:9090/api/v1/write"
+    grafana_alloy_loki_url: "http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:3100/loki/api/v1/push"
+
+  pre_tasks:
+    - name: Display deployment information
+      debug:
+        msg: |
+          Starting Grafana Alloy deployment...
+          Target hosts: {{ ansible_play_hosts | join(', ') }}
+          HTTP Port: {{ grafana_alloy_server_http_listen_port }}
+          GRPC Port: {{ grafana_alloy_server_grpc_listen_port }}
+          Log level: {{ grafana_alloy_server_log_level }}
+          Prometheus endpoint: {{ grafana_alloy_prometheus_remote_write_url }}
+          Loki endpoint: {{ grafana_alloy_loki_url }}
+
+    - name: Verify connectivity to all hosts
+      ping:
+
+    - name: Check if Prometheus is accessible
+      uri:
+        url: "http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:9090/-/ready"
+        method: GET
+        status_code: 200
+        timeout: 10
+      delegate_to: localhost
+      run_once: true
+      register: prometheus_check
+      failed_when: false
+
+    - name: Check if Loki is accessible
+      uri:
+        url: "http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:3100/ready"
+        method: GET
+        status_code: 200
+        timeout: 10
+      delegate_to: localhost
+      run_once: true
+      register: loki_check
+      failed_when: false
+
+    - name: Warn if Prometheus is not accessible
+      debug:
+        msg: "WARNING: Prometheus server is not accessible. Grafana Alloy metrics may not be forwarded."
+      when: prometheus_check is failed or prometheus_check.status is not defined or prometheus_check.status != 200
+      run_once: true
+
+    - name: Warn if Loki is not accessible
+      debug:
+        msg: "WARNING: Loki server is not accessible. Grafana Alloy logs may not be forwarded."
+      when: loki_check is failed or loki_check.status is not defined or loki_check.status != 200
+      run_once: true
+
+    - name: Ensure system is updated
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure system is updated (RHEL/CentOS)
+      yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Stop existing grafana-agent service if present
+      systemd:
+        name: grafana-agent
+        state: stopped
+        enabled: no
+      failed_when: false
+
+    - name: Stop existing promtail service if present
+      systemd:
+        name: promtail
+        state: stopped
+        enabled: no
+      failed_when: false
+
+    - name: Stop existing node_exporter service if present
+      systemd:
+        name: node_exporter
+        state: stopped
+        enabled: no
+      failed_when: false
+
+  roles:
+    # Deploy common prerequisites first (Docker-free version)
+    - role: monitoring-common
+      vars:
+        monitoring_docker_enabled: false
+        monitoring_create_network: false
+      tags: [common, always]
+
+    # Deploy Grafana Alloy (unified metrics and logs collection)
+    - role: grafana-alloy
+      tags: [grafana-alloy, alloy, metrics, logs]
+
+  post_tasks:
+    - name: Wait for Grafana Alloy to stabilize
+      pause:
+        seconds: 15
+
+    - name: Verify Grafana Alloy is accessible
+      uri:
+        url: "http://localhost:{{ grafana_alloy_server_http_listen_port }}/-/ready"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: alloy_ready_check
+      retries: 5
+      delay: 10
+
+    - name: Check Grafana Alloy metrics endpoint
+      uri:
+        url: "http://localhost:{{ grafana_alloy_server_http_listen_port }}/metrics"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: alloy_metrics_check
+      retries: 3
+      delay: 10
+
+    - name: Display Grafana Alloy metrics sample
+      debug:
+        msg: |
+          Grafana Alloy metrics sample:
+          {{ alloy_metrics_check.content.split('\n')[:10] | join('\n') }}
+      when: alloy_metrics_check is succeeded and alloy_metrics_check.content is defined
+
+    - name: Check Grafana Alloy configuration endpoint
+      uri:
+        url: "http://localhost:{{ grafana_alloy_server_http_listen_port }}/-/config"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: alloy_config_check
+      failed_when: false
+
+    - name: Create Grafana Alloy summary file
+      template:
+        src: alloy-summary.txt.j2
+        dest: "{{ monitoring_base_dir }}/GRAFANA_ALLOY_SUMMARY.txt"
+        mode: "0644"
+      vars:
+        deployment_date: "{{ ansible_date_time.iso8601 }}"
+      failed_when: false
+
+    - name: Test log shipping
+      block:
+        - name: Create test log entry
+          shell: |
+            logger -t alloy-test "Test log from {{ inventory_hostname }} at $(date)"
+          register: test_log
+
+        - name: Wait for log to be processed
+          pause:
+            seconds: 10
+
+        - name: Display test completion
+          debug:
+            msg: |
+              Test log created. To verify in Grafana:
+              1. Go to http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:3000
+              2. Navigate to Explore
+              3. Select Loki data source
+              4. Query: {hostname="{{ inventory_hostname }}"}
+      tags: test
+
+    - name: Display access information
+      debug:
+        msg: |
+          ============================================
+          Grafana Alloy Deployment Complete!
+          ============================================
+
+          Service Information:
+          - Status: {{ alloy_service_result.status.ActiveState | default('Active') }}
+          - Configuration: {{ grafana_alloy_config_file }}
+          - Data directory: {{ grafana_alloy_data_dir }}
+
+          Access URLs:
+          - Web UI: http://{{ ansible_default_ipv4.address }}:{{ grafana_alloy_server_http_listen_port }}
+          - Metrics: http://{{ ansible_default_ipv4.address }}:{{ grafana_alloy_server_http_listen_port }}/metrics
+          - Ready Check: http://{{ ansible_default_ipv4.address }}:{{ grafana_alloy_server_http_listen_port }}/-/ready
+          - Configuration: http://{{ ansible_default_ipv4.address }}:{{ grafana_alloy_server_http_listen_port }}/-/config
+
+          Data Flow:
+          - Metrics → Prometheus: {{ grafana_alloy_prometheus_remote_write_url }}
+          - Logs → Loki: {{ grafana_alloy_loki_url }}
+
+          Key Features:
+          - System metrics collection (CPU, Memory, Disk, Network)
+          - Log collection (syslog, auth.log, systemd journal)
+          - Unified agent for both metrics and logs
+          - Built-in web interface for monitoring and debugging
+          - Docker/cAdvisor metrics support (configurable per host)
+          - Flexible log configuration per host
+
+          Management Commands:
+          - Check status: sudo systemctl status alloy
+          - View logs: sudo journalctl -u alloy -f
+          - Restart service: sudo systemctl restart alloy
+          - Validate config: {{ grafana_alloy_bin_path }} fmt {{ grafana_alloy_config_file }}
+
+          ============================================
+
+- name: Update Prometheus configuration to scrape Grafana Alloy
+  hosts: monitoring_servers
+  become: true
+  gather_facts: true
+  tags: prometheus_config
+
+  tasks:
+    - name: Check if Prometheus configuration exists
+      stat:
+        path: /opt/monitoring/prometheus/configs/prometheus.yml
+      register: prometheus_config
+
+    - name: Read current Prometheus configuration
+      slurp:
+        src: /opt/monitoring/prometheus/configs/prometheus.yml
+      register: prometheus_config_content
+      when: prometheus_config.stat.exists
+
+    - name: Check if Grafana Alloy job already exists
+      set_fact:
+        alloy_exists: '{{ ''job_name: "alloy"'' in (prometheus_config_content.content | b64decode) or "job_name: ''alloy''" in (prometheus_config_content.content | b64decode) }}'
+      when: prometheus_config.stat.exists
+
+    - name: Remove old Grafana Agent jobs from Prometheus config
+      lineinfile:
+        path: /opt/monitoring/prometheus/configs/prometheus.yml
+        regexp: "{{ item }}"
+        state: absent
+      loop:
+        - '^\s*- job_name: "grafana-agent"'
+        - '^\s*- job_name: "promtail"'
+        - '^\s*- job_name: "node-exporter"'
+      when: prometheus_config.stat.exists
+      notify: reload prometheus
+
+    - name: Add Grafana Alloy job to Prometheus configuration
+      lineinfile:
+        path: /opt/monitoring/prometheus/configs/prometheus.yml
+        line: |2
+            - job_name: "alloy"
+              static_configs:
+                - targets:
+          {% for host in groups['client_hosts'] %}
+                    - "{{ hostvars[host]['ansible_host'] }}:12345"
+          {% endfor %}
+              relabel_configs:
+                - source_labels: [__address__]
+                  regex: "([^:]+):.*"
+                  target_label: instance
+                  replacement: "$1"
+        insertafter: "^scrape_configs:"
+        state: present
+      when:
+        - prometheus_config.stat.exists
+        - not alloy_exists | default(false)
+      notify: reload prometheus
+
+    - name: Validate Prometheus configuration
+      command: |
+        docker run --rm \
+          -v /opt/monitoring/prometheus/configs/prometheus.yml:/prometheus.yml \
+          -v /opt/monitoring/prometheus/configs/alert-rules.yml:/etc/prometheus/alert-rules.yml \
+          --entrypoint promtool \
+          prom/prometheus:latest \
+          check config /prometheus.yml
+      when: prometheus_config.stat.exists
+      changed_when: false
+      register: config_validation
+      failed_when: false
+
+    - name: Display configuration validation result
+      debug:
+        msg: "Prometheus configuration validation: {{ 'PASSED' if config_validation.rc == 0 else 'FAILED' }}"
+      when: config_validation is defined
+
+  handlers:
+    - name: reload prometheus
+      shell: |
+        docker exec prometheus kill -HUP 1
+      failed_when: false
+
+- name: Display deployment summary
+  hosts: localhost
+  gather_facts: false
+  run_once: true
+
+  tasks:
+    - name: Generate deployment report
+      debug:
+        msg: |
+          ==========================================
+          Grafana Alloy Deployment Summary
+          ==========================================
+
+          Deployed to hosts:
+          {% for host in groups['client_hosts'] %}
+          - {{ host }} ({{ hostvars[host]['ansible_default_ipv4']['address'] }})
+            Web UI: http://{{ hostvars[host]['ansible_default_ipv4']['address'] }}:12345
+            Metrics: http://{{ hostvars[host]['ansible_default_ipv4']['address'] }}:12345/metrics
+            Status: http://{{ hostvars[host]['ansible_default_ipv4']['address'] }}:12345/-/ready
+          {% endfor %}
+
+          Data endpoints:
+          - Prometheus: http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:9090
+          - Loki: http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:3100
+
+          View in Grafana:
+          - URL: http://{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}:3000
+          - Metrics: Prometheus data source
+          - Logs: Loki data source
+
+          Key improvements over Grafana Agent:
+          - More flexible configuration format (Alloy config language)
+          - Better component composition and reusability
+          - Enhanced debugging and introspection capabilities
+          - Improved performance and resource efficiency
+          - Advanced filtering and processing capabilities
+          - Per-host configurable logging and metrics
+          - Docker/cAdvisor metrics support (configurable)
+
+          Configuration examples:
+          - Enable Docker metrics: Set grafana_alloy_docker_enabled: true in host_vars
+          - Enable cAdvisor metrics: Set grafana_alloy_cadvisor_enabled: true in host_vars
+          - Add custom logs: Define grafana_alloy_custom_logs in host_vars
+          - Enable Docker logs: Set grafana_alloy_docker_logs_enabled: true in host_vars
+
+          ==========================================
+
+# Usage examples:
+# Deploy Grafana Alloy:
+# ansible-playbook -i inventory deploy-grafana-alloy.yml
+#
+# Deploy with custom configuration:
+# ansible-playbook -i inventory deploy-grafana-alloy.yml -e "grafana_alloy_server_log_level=debug"
+#
+# Deploy to specific hosts:
+# ansible-playbook -i inventory deploy-grafana-alloy.yml --limit client_hosts
+#
+# Test deployment:
+# ansible-playbook -i inventory deploy-grafana-alloy.yml --tags test
+#
+# Update Prometheus config only:
+# ansible-playbook -i inventory deploy-grafana-alloy.yml --tags prometheus_config

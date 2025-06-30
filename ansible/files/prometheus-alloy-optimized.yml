@@ -7,8 +7,8 @@ global:
 
 rule_files:
   - "/etc/prometheus/alert-rules.yml"
-  - "/etc/prometheus/alloy-alert-rules.yml"
-  - "/etc/prometheus/alloy-recording-rules.yml"
+  - "/etc/prometheus/alloy-rules.yml"
+  - "/etc/prometheus/recording-rules.yml"
 
 alerting:
   alertmanagers:
@@ -18,19 +18,14 @@ alerting:
       timeout: 10s
       api_version: v2
 
-# Remote write configuration for long-term storage or federation
+# Remote write configuration for federation or long-term storage
 remote_write:
   - url: "http://localhost:9090/api/v1/write"
     name: "local-prometheus"
     write_relabel_configs:
-      # Keep important metrics for long-term storage
       - source_labels: [__name__]
-        regex: "up|prometheus_.*|alloy_.*|node_.*|container_.*|go_.*|process_.*"
+        regex: "up|prometheus_.*|alloy_.*|node_.*|container_.*|go_.*"
         action: keep
-      # Drop high-cardinality metrics
-      - source_labels: [__name__]
-        regex: "prometheus_tsdb_.*|prometheus_engine_.*"
-        action: drop
     queue_config:
       capacity: 10000
       max_samples_per_send: 2000
@@ -74,29 +69,29 @@ scrape_configs:
         replacement: "alloy"
       - target_label: service
         replacement: "grafana-alloy"
-      # Add environment label
-      - target_label: environment
-        replacement: "production"
     metric_relabel_configs:
       # Keep important Alloy internal metrics
       - source_labels: [__name__]
-        regex: "alloy_.*|prometheus_.*|loki_.*|up|scrape_.*|go_.*|process_.*"
+        regex: "alloy_.*|prometheus_.*|loki_.*|up|scrape_.*"
         action: keep
-      # Drop noisy metrics
+      # Rename some metrics for consistency
       - source_labels: [__name__]
-        regex: "alloy_component_dependencies_.*|alloy_component_evaluation_slow_.*"
-        action: drop
+        regex: "alloy_build_info"
+        target_label: __name__
+        replacement: "alloy_up"
 
-  # Node metrics collected via Alloy (more efficient than separate node_exporter)
-  - job_name: "node-via-alloy"
+  # System metrics via Alloy (replaces node_exporter)
+  - job_name: "node-metrics-via-alloy"
     static_configs:
       - targets:
           - "192.168.122.31:12345"
           - "192.168.122.94:12345"
-    scrape_interval: 30s
-    scrape_timeout: 15s
+    scrape_interval: 15s
+    scrape_timeout: 10s
     metrics_path: /metrics
     honor_labels: true
+    params:
+      collector: ["node"]
     relabel_configs:
       - source_labels: [__address__]
         regex: "([^:]+):.*"
@@ -109,20 +104,14 @@ scrape_configs:
       - source_labels: [__name__]
         regex: "node_.*"
         action: keep
-      # Drop filesystem metrics for unwanted filesystems
-      - source_labels: [__name__, fstype]
-        regex: "node_filesystem_.*;(tmpfs|devtmpfs|overlay|squashfs|proc|sysfs|cgroup.*)"
-        action: drop
-      # Drop network interface metrics for virtual interfaces
-      - source_labels: [__name__, device]
-        regex: "node_network_.*;(veth.*|docker.*|br-.*|lo)"
-        action: drop
-      # Drop disk metrics for loop and virtual devices
-      - source_labels: [__name__, device]
-        regex: "node_disk_.*;(loop.*|ram.*|sr.*)"
+      # Drop high cardinality metrics
+      - source_labels: [__name__]
+        regex: "node_filesystem_.*"
+        source_labels: [fstype]
+        regex: "tmpfs|devtmpfs|overlay|squashfs|proc|sysfs|cgroup.*"
         action: drop
 
-  # Container metrics via cAdvisor (when available through Alloy)
+  # Container metrics via cAdvisor (if enabled in Alloy)
   - job_name: "cadvisor-via-alloy"
     static_configs:
       - targets:
@@ -132,6 +121,8 @@ scrape_configs:
     scrape_timeout: 15s
     metrics_path: /metrics
     honor_labels: true
+    params:
+      collector: ["cadvisor"]
     relabel_configs:
       - source_labels: [__address__]
         regex: "([^:]+):.*"
@@ -144,17 +135,12 @@ scrape_configs:
       - source_labels: [__name__]
         regex: "container_.*"
         action: keep
-      # Drop metrics for pause containers
+      # Drop pause containers and system containers
       - source_labels: [container_label_io_kubernetes_pod_name]
         regex: ".*pause.*"
         action: drop
-      # Drop system containers
       - source_labels: [name]
-        regex: "k8s_POD_.*|.*_POD_.*"
-        action: drop
-      # Drop empty container names
-      - source_labels: [name]
-        regex: "^$"
+        regex: "k8s_POD_.*"
         action: drop
 
   # Legacy cAdvisor direct scraping (fallback)
@@ -202,8 +188,8 @@ scrape_configs:
       - targets:
           - "192.168.122.31:12345"
           - "192.168.122.94:12345"
-    scrape_interval: 10s
-    scrape_timeout: 5s
+    scrape_interval: 30s
+    scrape_timeout: 10s
     metrics_path: /-/ready
     relabel_configs:
       - source_labels: [__address__]
@@ -213,80 +199,44 @@ scrape_configs:
       - target_label: job
         replacement: "alloy-health"
 
-  # Service Discovery for dynamic Alloy instances
+  # Service Discovery for dynamic Alloy instances (if using)
   - job_name: "alloy-discovery"
     file_sd_configs:
       - files:
           - "/etc/prometheus/sd/alloy-*.yml"
         refresh_interval: 30s
     scrape_interval: 15s
-    scrape_timeout: 10s
     relabel_configs:
-      # Use meta labels from service discovery
       - source_labels: [__meta_alloy_role]
         target_label: alloy_role
       - source_labels: [__meta_alloy_datacenter]
         target_label: datacenter
       - source_labels: [__meta_alloy_environment]
         target_label: environment
-      - source_labels: [__meta_alloy_zone]
-        target_label: zone
-      - source_labels: [__meta_alloy_cluster]
-        target_label: cluster
-      # Extract instance from address
-      - source_labels: [__address__]
-        regex: "([^:]+):.*"
-        target_label: instance
-        replacement: "$1"
-
-  # Blackbox exporter for external service monitoring
-  - job_name: "blackbox"
-    metrics_path: /probe
-    params:
-      module: [http_2xx]
-    static_configs:
-      - targets:
-          - http://prometheus:9090/-/healthy
-          - http://grafana:3000/api/health
-          - http://loki:3100/ready
-          - http://alertmanager:9093/-/healthy
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: blackbox-exporter:9115
 
 # Storage configuration optimized for Alloy metrics
 storage:
   tsdb:
     path: /prometheus/data
-    retention.time: 15d
-    retention.size: 30GB
+    retention.time: 30d
+    retention.size: 50GB
     min-block-duration: 2h
     max-block-duration: 25h
     wal-compression: true
     no-lockfile: false
     head-chunks-write-queue-size: 10000
 
-# Query optimization
-query:
-  timeout: 2m
-  max-concurrency: 20
-  max-samples: 50000000
-
-# Web configuration
-web:
-  console.libraries: /etc/prometheus/console_libraries
-  console.templates: /etc/prometheus/consoles
-  enable-lifecycle: true
-  enable-admin-api: true
-  page-title: "Prometheus - Alloy Monitoring"
-  max-connections: 512
-  read-timeout: 30s
-
-# Log configuration
-log:
-  level: info
-  format: logfmt
+# Optional: Federation for multi-cluster setup
+# federation:
+#   - job_name: 'federate'
+#     scrape_interval: 15s
+#     honor_labels: true
+#     metrics_path: '/federate'
+#     params:
+#       match[]:
+#         - '{job="alloy"}'
+#         - '{job="node"}'
+#         - '{__name__=~"up|alloy_.*|node_.*"}'
+#     static_configs:
+#       - targets:
+#         - 'remote-prometheus:9090'

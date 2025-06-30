@@ -1,0 +1,91 @@
+# Grafana Alloy Service Discovery Configuration
+# This file is used by Prometheus for dynamic discovery of Alloy instances
+# Format: Prometheus file-based service discovery
+
+- targets:
+    - "192.168.122.31:12345"
+  labels:
+    __meta_alloy_role: "client"
+    __meta_alloy_datacenter: "dc1"
+    __meta_alloy_environment: "production"
+    __meta_alloy_zone: "zone-a"
+    __meta_alloy_cluster: "monitoring-cluster"
+    __meta_alloy_version: "v1.0.0"
+    service: "grafana-alloy"
+    job: "alloy"
+    instance_type: "physical"
+    os: "linux"
+    arch: "amd64"
+
+- targets:
+    - "192.168.122.94:12345"
+  labels:
+    __meta_alloy_role: "client"
+    __meta_alloy_datacenter: "dc1"
+    __meta_alloy_environment: "production"
+    __meta_alloy_zone: "zone-b"
+    __meta_alloy_cluster: "monitoring-cluster"
+    __meta_alloy_version: "v1.0.0"
+    service: "grafana-alloy"
+    job: "alloy"
+    instance_type: "physical"
+    os: "linux"
+    arch: "amd64"
+
+# Example configuration for cloud/container environments
+# Uncomment and modify as needed:
+
+# - targets:
+#     - "alloy-node-1.example.com:12345"
+#     - "alloy-node-2.example.com:12345"
+#     - "alloy-node-3.example.com:12345"
+#   labels:
+#     __meta_alloy_role: "client"
+#     __meta_alloy_datacenter: "cloud-dc1"
+#     __meta_alloy_environment: "staging"
+#     __meta_alloy_zone: "us-east-1a"
+#     __meta_alloy_cluster: "k8s-monitoring"
+#     __meta_alloy_version: "v1.1.0"
+#     service: "grafana-alloy"
+#     job: "alloy"
+#     instance_type: "container"
+#     platform: "kubernetes"
+
+# - targets:
+#     - "alloy-edge-1.example.com:12345"
+#     - "alloy-edge-2.example.com:12345"
+#   labels:
+#     __meta_alloy_role: "edge"
+#     __meta_alloy_datacenter: "edge-dc1"
+#     __meta_alloy_environment: "production"
+#     __meta_alloy_zone: "edge-zone-1"
+#     __meta_alloy_cluster: "edge-monitoring"
+#     service: "grafana-alloy"
+#     job: "alloy-edge"
+#     instance_type: "edge"
+#     connectivity: "limited"
+
+# Docker Swarm example:
+# - targets:
+#     - "alloy.monitoring_default:12345"
+#   labels:
+#     __meta_alloy_role: "swarm-client"
+#     __meta_alloy_datacenter: "swarm-dc1"
+#     __meta_alloy_environment: "production"
+#     __meta_alloy_cluster: "docker-swarm"
+#     service: "grafana-alloy"
+#     job: "alloy"
+#     instance_type: "container"
+#     platform: "docker-swarm"
+
+# Labels explanation:
+# __meta_alloy_role: Role of the Alloy instance (client, edge, aggregator)
+# __meta_alloy_datacenter: Physical or logical datacenter
+# __meta_alloy_environment: Environment (production, staging, development)
+# __meta_alloy_zone: Availability zone or rack identifier
+# __meta_alloy_cluster: Cluster or group identifier
+# __meta_alloy_version: Version of Alloy running
+# service: Service name for grouping
+# job: Prometheus job name
+# instance_type: Type of instance (physical, container, edge)
+# Additional labels can be added based on your infrastructure needs

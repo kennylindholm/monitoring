@@ -1,0 +1,289 @@
+groups:
+  - name: alloy.rules
+    interval: 30s
+    rules:
+      # Alloy service availability
+      - record: alloy:up
+        expr: up{job="alloy"}
+        labels:
+          service: grafana-alloy
+
+      # Alloy instance count
+      - record: alloy:instances:count
+        expr: count(up{job="alloy"})
+
+      # Alloy healthy instances
+      - record: alloy:instances:healthy
+        expr: count(up{job="alloy"} == 1)
+
+      # Alloy availability ratio
+      - record: alloy:availability:ratio
+        expr: alloy:instances:healthy / alloy:instances:count
+
+      # Alloy scrape duration
+      - record: alloy:scrape_duration:mean
+        expr: avg(scrape_duration_seconds{job="alloy"})
+
+      # Alloy memory usage
+      - record: alloy:memory_usage:bytes
+        expr: alloy_prometheus_fanout_latency{quantile="0.99"}
+
+      # Alloy CPU usage rate
+      - record: alloy:cpu_usage:rate5m
+        expr: rate(alloy_prometheus_fanout_latency_sum[5m])
+
+  - name: alloy.node.rules
+    interval: 30s
+    rules:
+      # Node CPU usage aggregated from Alloy
+      - record: alloy:node_cpu:usage_rate5m
+        expr: |
+          (
+            1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance)
+          ) * 100
+
+      # Node memory usage percentage
+      - record: alloy:node_memory:usage_percent
+        expr: |
+          (
+            1 - (
+              node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes
+            )
+          ) * 100
+
+      # Node disk usage percentage
+      - record: alloy:node_disk:usage_percent
+        expr: |
+          (
+            1 - (
+              node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs|proc|sysfs"} /
+              node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs|proc|sysfs"}
+            )
+          ) * 100
+
+      # Node network receive rate
+      - record: alloy:node_network:receive_rate5m
+        expr: |
+          rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*|br-.*"}[5m])
+
+      # Node network transmit rate
+      - record: alloy:node_network:transmit_rate5m
+        expr: |
+          rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*|br-.*"}[5m])
+
+      # Node load average 1m
+      - record: alloy:node_load:1m
+        expr: node_load1
+
+      # Node load average 5m
+      - record: alloy:node_load:5m
+        expr: node_load5
+
+      # Node load average 15m
+      - record: alloy:node_load:15m
+        expr: node_load15
+
+  - name: alloy.container.rules
+    interval: 30s
+    rules:
+      # Container CPU usage rate
+      - record: alloy:container_cpu:usage_rate5m
+        expr: |
+          rate(container_cpu_usage_seconds_total{name!=""}[5m]) * 100
+
+      # Container memory usage percentage
+      - record: alloy:container_memory:usage_percent
+        expr: |
+          (
+            container_memory_usage_bytes{name!=""} /
+            container_spec_memory_limit_bytes{name!=""} > 0
+          ) * 100
+
+      # Container network receive rate
+      - record: alloy:container_network:receive_rate5m
+        expr: |
+          rate(container_network_receive_bytes_total{name!=""}[5m])
+
+      # Container network transmit rate
+      - record: alloy:container_network:transmit_rate5m
+        expr: |
+          rate(container_network_transmit_bytes_total{name!=""}[5m])
+
+      # Container filesystem usage percentage
+      - record: alloy:container_fs:usage_percent
+        expr: |
+          (
+            container_fs_usage_bytes{name!=""} /
+            container_fs_limit_bytes{name!=""} > 0
+          ) * 100
+
+  - name: alloy.loki.rules
+    interval: 30s
+    rules:
+      # Loki write requests rate via Alloy
+      - record: alloy:loki_write:requests_rate5m
+        expr: |
+          rate(loki_write_requests_total[5m])
+
+      # Loki write errors rate via Alloy
+      - record: alloy:loki_write:errors_rate5m
+        expr: |
+          rate(loki_write_requests_total{status_code!~"2.."}[5m])
+
+      # Loki write success rate
+      - record: alloy:loki_write:success_rate5m
+        expr: |
+          rate(loki_write_requests_total{status_code=~"2.."}[5m]) /
+          rate(loki_write_requests_total[5m])
+
+      # Loki batch size average
+      - record: alloy:loki_batch:size_avg
+        expr: |
+          rate(loki_write_batch_entries_sum[5m]) /
+          rate(loki_write_batch_entries_count[5m])
+
+      # Loki write latency
+      - record: alloy:loki_write:latency_p99
+        expr: |
+          histogram_quantile(0.99, rate(loki_write_request_duration_seconds_bucket[5m]))
+
+      - record: alloy:loki_write:latency_p95
+        expr: |
+          histogram_quantile(0.95, rate(loki_write_request_duration_seconds_bucket[5m]))
+
+      - record: alloy:loki_write:latency_p50
+        expr: |
+          histogram_quantile(0.50, rate(loki_write_request_duration_seconds_bucket[5m]))
+
+  - name: alloy.prometheus.rules
+    interval: 30s
+    rules:
+      # Prometheus remote write requests rate via Alloy
+      - record: alloy:prometheus_remote_write:requests_rate5m
+        expr: |
+          rate(prometheus_remote_write_requests_total[5m])
+
+      # Prometheus remote write errors rate via Alloy
+      - record: alloy:prometheus_remote_write:errors_rate5m
+        expr: |
+          rate(prometheus_remote_write_requests_total{status_code!~"2.."}[5m])
+
+      # Prometheus remote write success rate
+      - record: alloy:prometheus_remote_write:success_rate5m
+        expr: |
+          rate(prometheus_remote_write_requests_total{status_code=~"2.."}[5m]) /
+          rate(prometheus_remote_write_requests_total[5m])
+
+      # Prometheus samples sent rate
+      - record: alloy:prometheus_samples:sent_rate5m
+        expr: |
+          rate(prometheus_remote_write_samples_total[5m])
+
+      # Prometheus WAL truncations
+      - record: alloy:prometheus_wal:truncations_rate5m
+        expr: |
+          rate(prometheus_wal_truncations_total[5m])
+
+      # Prometheus queue length
+      - record: alloy:prometheus_queue:length
+        expr: |
+          prometheus_remote_write_pending_samples
+
+      # Prometheus fanout latency
+      - record: alloy:prometheus_fanout:latency_p99
+        expr: |
+          histogram_quantile(0.99, rate(prometheus_fanout_latency_bucket[5m]))
+
+      - record: alloy:prometheus_fanout:latency_p95
+        expr: |
+          histogram_quantile(0.95, rate(prometheus_fanout_latency_bucket[5m]))
+
+  - name: alloy.health.rules
+    interval: 15s
+    rules:
+      # Overall health score
+      - record: alloy:health:score
+        expr: |
+          (
+            alloy:availability:ratio * 0.4 +
+            (alloy:prometheus_remote_write:success_rate5m > 0.95) * 0.3 +
+            (alloy:loki_write:success_rate5m > 0.95) * 0.3
+          )
+
+      # Service status summary
+      - record: alloy:service:status
+        expr: |
+          (
+            (alloy:instances:healthy > 0) * 2 +
+            (alloy:prometheus_remote_write:success_rate5m > 0.9) +
+            (alloy:loki_write:success_rate5m > 0.9)
+          )
+
+      # Critical services down
+      - record: alloy:critical:services_down
+        expr: |
+          (alloy:instances:healthy == 0) +
+          (alloy:prometheus_remote_write:success_rate5m < 0.5) +
+          (alloy:loki_write:success_rate5m < 0.5)
+
+  - name: alloy.performance.rules
+    interval: 60s
+    rules:
+      # Average response time across all Alloy instances
+      - record: alloy:response_time:avg
+        expr: |
+          avg(alloy:prometheus_fanout:latency_p95)
+
+      # Peak memory usage
+      - record: alloy:memory:peak_usage_bytes
+        expr: |
+          max_over_time(alloy:memory_usage:bytes[1h])
+
+      # Peak CPU usage
+      - record: alloy:cpu:peak_usage_rate
+        expr: |
+          max_over_time(alloy:cpu_usage:rate5m[1h])
+
+      # Throughput metrics
+      - record: alloy:throughput:samples_per_second
+        expr: |
+          alloy:prometheus_samples:sent_rate5m
+
+      - record: alloy:throughput:logs_per_second
+        expr: |
+          rate(loki_write_entries_total[5m])
+
+      # Efficiency metrics
+      - record: alloy:efficiency:samples_per_cpu_second
+        expr: |
+          alloy:throughput:samples_per_second / alloy:cpu_usage:rate5m
+
+      - record: alloy:efficiency:logs_per_memory_mb
+        expr: |
+          alloy:throughput:logs_per_second / (alloy:memory_usage:bytes / 1024 / 1024)
+
+  - name: alloy.capacity.rules
+    interval: 300s
+    rules:
+      # Capacity planning - projected growth
+      - record: alloy:capacity:samples_per_hour_trend
+        expr: |
+          increase(prometheus_remote_write_samples_total[1h])
+
+      - record: alloy:capacity:logs_per_hour_trend
+        expr: |
+          increase(loki_write_entries_total[1h])
+
+      # Resource utilization trends
+      - record: alloy:capacity:memory_trend_24h
+        expr: |
+          increase(alloy:memory_usage:bytes[24h])
+
+      - record: alloy:capacity:cpu_trend_24h
+        expr: |
+          avg_over_time(alloy:cpu_usage:rate5m[24h])
+
+      # Queue depth trends
+      - record: alloy:capacity:queue_depth_trend
+        expr: |
+          max_over_time(alloy:prometheus_queue:length[1h])

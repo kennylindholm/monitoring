@@ -1,0 +1,375 @@
+groups:
+  - name: alloy.availability
+    rules:
+      - alert: AlloyDown
+        expr: up{job="alloy"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: agent
+        annotations:
+          summary: "Grafana Alloy instance is down"
+          description: "Grafana Alloy instance {{ $labels.instance }} has been down for more than 1 minute."
+          runbook_url: "https://grafana.com/docs/alloy/latest/troubleshoot/"
+
+      - alert: AlloyInstancesUnhealthy
+        expr: (alloy:instances:healthy / alloy:instances:count) < 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: cluster
+        annotations:
+          summary: "Less than 80% of Alloy instances are healthy"
+          description: "Only {{ $value | humanizePercentage }} of Grafana Alloy instances are healthy."
+
+      - alert: AlloyAllInstancesDown
+        expr: alloy:instances:healthy == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: cluster
+        annotations:
+          summary: "All Grafana Alloy instances are down"
+          description: "All Grafana Alloy instances are down. Metrics and logs collection has stopped."
+
+      - alert: AlloyScrapeFailure
+        expr: up{job="alloy"} == 0 or scrape_duration_seconds{job="alloy"} > 30
+        for: 3m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: scraping
+        annotations:
+          summary: "Grafana Alloy scraping issues"
+          description: "Grafana Alloy instance {{ $labels.instance }} is either down or taking too long to scrape ({{ $value }}s)."
+
+  - name: alloy.performance
+    rules:
+      - alert: AlloyHighMemoryUsage
+        expr: alloy:node_memory:usage_percent > 85
+        for: 10m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: performance
+        annotations:
+          summary: "Grafana Alloy high memory usage"
+          description: "Grafana Alloy instance {{ $labels.instance }} memory usage is {{ $value | humanizePercentage }}."
+
+      - alert: AlloyCriticalMemoryUsage
+        expr: alloy:node_memory:usage_percent > 95
+        for: 5m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: performance
+        annotations:
+          summary: "Grafana Alloy critical memory usage"
+          description: "Grafana Alloy instance {{ $labels.instance }} memory usage is critically high at {{ $value | humanizePercentage }}."
+
+      - alert: AlloyHighCPUUsage
+        expr: alloy:node_cpu:usage_rate5m > 80
+        for: 15m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: performance
+        annotations:
+          summary: "Grafana Alloy high CPU usage"
+          description: "Grafana Alloy instance {{ $labels.instance }} CPU usage is {{ $value | humanizePercentage }}."
+
+      - alert: AlloyHighDiskUsage
+        expr: alloy:node_disk:usage_percent > 85
+        for: 10m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: storage
+        annotations:
+          summary: "Grafana Alloy high disk usage"
+          description: "Grafana Alloy instance {{ $labels.instance }} disk usage is {{ $value | humanizePercentage }}."
+
+      - alert: AlloySlowScraping
+        expr: alloy:scrape_duration:mean > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: scraping
+        annotations:
+          summary: "Grafana Alloy slow scraping performance"
+          description: "Average scrape duration for Grafana Alloy is {{ $value }}s, which is unusually high."
+
+  - name: alloy.prometheus
+    rules:
+      - alert: AlloyPrometheusRemoteWriteFailure
+        expr: alloy:prometheus_remote_write:success_rate5m < 0.9
+        for: 5m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: prometheus
+        annotations:
+          summary: "Grafana Alloy Prometheus remote write failing"
+          description: "Grafana Alloy Prometheus remote write success rate is {{ $value | humanizePercentage }} on instance {{ $labels.instance }}."
+
+      - alert: AlloyPrometheusRemoteWriteHighLatency
+        expr: alloy:prometheus_fanout:latency_p95 > 5
+        for: 10m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: prometheus
+        annotations:
+          summary: "Grafana Alloy Prometheus remote write high latency"
+          description: "Grafana Alloy Prometheus remote write P95 latency is {{ $value }}s on instance {{ $labels.instance }}."
+
+      - alert: AlloyPrometheusQueueTooLarge
+        expr: alloy:prometheus_queue:length > 10000
+        for: 5m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: prometheus
+        annotations:
+          summary: "Grafana Alloy Prometheus queue too large"
+          description: "Grafana Alloy Prometheus remote write queue has {{ $value }} pending samples on instance {{ $labels.instance }}."
+
+      - alert: AlloyPrometheusNoSamples
+        expr: alloy:prometheus_samples:sent_rate5m == 0
+        for: 10m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: prometheus
+        annotations:
+          summary: "Grafana Alloy not sending Prometheus samples"
+          description: "Grafana Alloy instance {{ $labels.instance }} is not sending any Prometheus samples."
+
+      - alert: AlloyPrometheusWALCorruption
+        expr: increase(prometheus_wal_corruptions_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: prometheus
+        annotations:
+          summary: "Grafana Alloy Prometheus WAL corruption detected"
+          description: "Grafana Alloy instance {{ $labels.instance }} has detected WAL corruption. Data loss possible."
+
+  - name: alloy.loki
+    rules:
+      - alert: AlloyLokiWriteFailure
+        expr: alloy:loki_write:success_rate5m < 0.9
+        for: 5m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: loki
+        annotations:
+          summary: "Grafana Alloy Loki write failing"
+          description: "Grafana Alloy Loki write success rate is {{ $value | humanizePercentage }} on instance {{ $labels.instance }}."
+
+      - alert: AlloyLokiWriteHighLatency
+        expr: alloy:loki_write:latency_p95 > 10
+        for: 10m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: loki
+        annotations:
+          summary: "Grafana Alloy Loki write high latency"
+          description: "Grafana Alloy Loki write P95 latency is {{ $value }}s on instance {{ $labels.instance }}."
+
+      - alert: AlloyLokiNoLogs
+        expr: alloy:throughput:logs_per_second == 0
+        for: 15m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: loki
+        annotations:
+          summary: "Grafana Alloy not sending logs"
+          description: "Grafana Alloy instance {{ $labels.instance }} is not sending any logs to Loki."
+
+      - alert: AlloyLokiBatchSizeTooSmall
+        expr: alloy:loki_batch:size_avg < 10
+        for: 10m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: loki
+        annotations:
+          summary: "Grafana Alloy Loki batch size too small"
+          description: "Grafana Alloy average Loki batch size is {{ $value }}, which may indicate configuration issues."
+
+      - alert: AlloyLokiHighErrorRate
+        expr: alloy:loki_write:errors_rate5m > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: loki
+        annotations:
+          summary: "Grafana Alloy Loki high error rate"
+          description: "Grafana Alloy is experiencing {{ $value }} Loki write errors per second on instance {{ $labels.instance }}."
+
+  - name: alloy.health
+    rules:
+      - alert: AlloyHealthScoreLow
+        expr: alloy:health:score < 0.7
+        for: 10m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: health
+        annotations:
+          summary: "Grafana Alloy health score is low"
+          description: "Grafana Alloy overall health score is {{ $value | humanizePercentage }}, indicating degraded performance."
+
+      - alert: AlloyCriticalServicesDown
+        expr: alloy:critical:services_down >= 2
+        for: 3m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: health
+        annotations:
+          summary: "Multiple critical Alloy services are down"
+          description: "{{ $value }} critical Grafana Alloy services are down."
+
+      - alert: AlloyConfigurationError
+        expr: increase(alloy_config_hash_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: configuration
+        annotations:
+          summary: "Grafana Alloy configuration error"
+          description: "Grafana Alloy instance {{ $labels.instance }} has configuration errors."
+
+      - alert: AlloyComponentFailure
+        expr: alloy_component_evaluation_failures_total > 0
+        for: 2m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: evaluation
+        annotations:
+          summary: "Grafana Alloy component evaluation failure"
+          description: "Grafana Alloy component {{ $labels.component_name }} on instance {{ $labels.instance }} is failing to evaluate."
+
+  - name: alloy.capacity
+    rules:
+      - alert: AlloyHighThroughputGrowth
+        expr: increase(alloy:capacity:samples_per_hour_trend[24h]) > (alloy:capacity:samples_per_hour_trend * 1.5)
+        for: 1h
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: capacity
+        annotations:
+          summary: "Grafana Alloy experiencing high throughput growth"
+          description: "Grafana Alloy sample throughput has grown by more than 50% in the last 24 hours."
+
+      - alert: AlloyResourceExhaustion
+        expr: |
+          (alloy:node_memory:usage_percent > 90) and
+          (alloy:node_cpu:usage_rate5m > 90) and
+          (alloy:node_disk:usage_percent > 90)
+        for: 5m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: capacity
+        annotations:
+          summary: "Grafana Alloy resource exhaustion"
+          description: "Grafana Alloy instance {{ $labels.instance }} is experiencing resource exhaustion (CPU, Memory, and Disk all > 90%)."
+
+      - alert: AlloyQueueDepthTrend
+        expr: alloy:capacity:queue_depth_trend > 50000
+        for: 10m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: capacity
+        annotations:
+          summary: "Grafana Alloy queue depth trending high"
+          description: "Grafana Alloy maximum queue depth over the last hour is {{ $value }}, indicating potential capacity issues."
+
+  - name: alloy.connectivity
+    rules:
+      - alert: AlloyNetworkConnectivityIssue
+        expr: |
+          (alloy:node_network:receive_rate5m + alloy:node_network:transmit_rate5m) == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: network
+        annotations:
+          summary: "Grafana Alloy network connectivity issue"
+          description: "Grafana Alloy instance {{ $labels.instance }} shows no network activity, possible connectivity issue."
+
+      - alert: AlloyPrometheusEndpointUnreachable
+        expr: probe_success{job="alloy-health"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: connectivity
+        annotations:
+          summary: "Grafana Alloy Prometheus endpoint unreachable"
+          description: "Grafana Alloy Prometheus endpoint on {{ $labels.instance }} is unreachable."
+
+      - alert: AlloyLokiEndpointUnreachable
+        expr: |
+          (alloy:loki_write:requests_rate5m == 0) and
+          (alloy:throughput:logs_per_second > 0)
+        for: 5m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: connectivity
+        annotations:
+          summary: "Grafana Alloy cannot reach Loki endpoint"
+          description: "Grafana Alloy instance {{ $labels.instance }} is generating logs but cannot reach Loki endpoint."
+
+  - name: alloy.security
+    rules:
+      - alert: AlloyUnauthorizedAccess
+        expr: increase(alloy_http_requests_total{code=~"401|403"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: security
+        annotations:
+          summary: "Grafana Alloy unauthorized access attempts"
+          description: "Grafana Alloy instance {{ $labels.instance }} is receiving unauthorized access attempts."
+
+      - alert: AlloyTLSCertificateExpiring
+        expr: (alloy_tls_certificate_expiry_seconds - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+          service: grafana-alloy
+          component: security
+        annotations:
+          summary: "Grafana Alloy TLS certificate expiring soon"
+          description: "Grafana Alloy TLS certificate on {{ $labels.instance }} expires in {{ $value }} days."
+
+      - alert: AlloyTLSCertificateExpired
+        expr: alloy_tls_certificate_expiry_seconds < time()
+        for: 0m
+        labels:
+          severity: critical
+          service: grafana-alloy
+          component: security
+        annotations:
+          summary: "Grafana Alloy TLS certificate expired"
+          description: "Grafana Alloy TLS certificate on {{ $labels.instance }} has expired."

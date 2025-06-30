@@ -3,7 +3,7 @@
 
 .PHONY: help ping docker-status \
         deploy-prometheus deploy-grafana deploy-loki deploy-alertmanager \
-        deploy-cadvisor deploy-grafana-alloy deploy-monitoring-scripts \
+        deploy-grafana-alloy deploy-monitoring-scripts \
         monitoring-status monitoring-logs \
         monitoring-stop monitoring-start monitoring-restart monitoring-health \
         monitoring-backup monitoring-update monitoring-check
@@ -24,8 +24,7 @@ help:
 	@echo "  deploy-loki             - Deploy Loki"
 	@echo "  deploy-prometheus       - Deploy Prometheus"
 	@echo "  deploy-alertmanager     - Deploy Alertmanager"
-	  deploy-grafana-alloy    - Deploy Grafana Alloy (unified metrics and logs)"
-	@echo "  deploy-cadvisor         - Deploy cAdvisor on docker_hosts"
+	@echo "  deploy-grafana-alloy    - Deploy Grafana Alloy (unified metrics and logs)"
 	@echo "  deploy-monitoring-scripts - Deploy monitoring scripts (backup, service status, etc.)"
 	  deploy-full-stack       - Deploy complete monitoring stack with Grafana Alloy"
 	@echo ""
@@ -47,8 +46,7 @@ help:
 	@echo "  restart-grafana         - Restart Grafana service"
 	@echo "  restart-loki            - Restart Loki service"
 	@echo "  restart-alertmanager    - Restart Alertmanager service"
-	@echo "  restart-cadvisor        - Restart cAdvisor service"
-	  restart-grafana-alloy   - Restart Grafana Alloy service"
+	@echo "  restart-grafana-alloy   - Restart Grafana Alloy service"
 	@echo "  tail-logs               - Tail logs for specific service (requires SERVICE=name)"
 	@echo ""
 	@echo "System & Configuration:"
@@ -91,9 +89,7 @@ deploy-loki:
 deploy-alertmanager:
 	ansible-playbook playbooks/deploy-alertmanager.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
-# Deploy exporters using dedicated playbooks
-deploy-cadvisor:
-	ansible-playbook playbooks/deploy-cadvisor.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
+
 
 # Deploy Grafana Alloy (unified metrics and logs collection)
 deploy-grafana-alloy:
@@ -108,7 +104,7 @@ monitoring-status:
 	@if [ -f /opt/monitoring/scripts/check-services.sh ]; then \
 		ansible monitoring_servers -a "/opt/monitoring/scripts/check-services.sh" --become; \
 	else \
-		ansible monitoring_servers -m shell -a "cd /opt/monitoring && for service in prometheus grafana loki alertmanager cadvisor; do echo \"Checking \$$service...\"; docker ps | grep \$$service || echo \"\$$service not running\"; done" --become; \
+		ansible monitoring_servers -m shell -a "cd /opt/monitoring && for service in prometheus grafana loki alertmanager; do echo \"Checking \$$service...\"; docker ps | grep \$$service || echo \"\$$service not running\"; done" --become; \
 	fi
 	@echo "Checking Grafana Alloy on client hosts..."
 	@ansible client_hosts -m shell -a "systemctl is-active alloy || echo 'alloy not running'" --become || true
@@ -117,17 +113,17 @@ monitoring-logs:
 	@if [ -n "$(SERVICE)" ]; then \
 		ansible monitoring_servers -m shell -a "docker logs --tail 100 -f $(SERVICE)" --become; \
 	else \
-		ansible monitoring_servers -m shell -a "cd /opt/monitoring && for service in prometheus grafana loki alertmanager cadvisor; do echo \"=== \$$service logs ===\"; docker logs --tail 50 \$$service 2>&1; echo; done" --become; \
+		ansible monitoring_servers -m shell -a "cd /opt/monitoring && for service in prometheus grafana loki alertmanager; do echo \"=== \$$service logs ===\"; docker logs --tail 50 \$$service 2>&1; echo; done" --become; \
 	fi
 
 monitoring-start:
-	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager cadvisor; do [ -d \$$dir ] && cd \$$dir && docker compose up -d && cd ..; done" --become
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager; do [ -d \$$dir ] && cd \$$dir && docker compose up -d && cd ..; done" --become
 
 monitoring-stop:
-	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager cadvisor; do [ -d \$$dir ] && cd \$$dir && docker compose down && cd ..; done" --become
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager; do [ -d \$$dir ] && cd \$$dir && docker compose down && cd ..; done" --become
 
 monitoring-restart:
-	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager cadvisor; do [ -d \$$dir ] && cd \$$dir && docker compose restart && cd ..; done" --become
+	ansible monitoring_servers -m shell -a "cd /opt/monitoring && for dir in prometheus grafana loki alertmanager; do [ -d \$$dir ] && cd \$$dir && docker compose restart && cd ..; done" --become
 
 monitoring-health:
 	@echo "Running health checks on monitoring services..."
@@ -135,7 +131,6 @@ monitoring-health:
 	@ansible monitoring_servers -m uri -a "url=http://localhost:3000/api/health" --become || echo "Grafana not healthy"
 	@ansible monitoring_servers -m uri -a "url=http://localhost:3100/ready" --become || echo "Loki not healthy"
 	@ansible monitoring_servers -m uri -a "url=http://localhost:9093/-/ready" --become || echo "Alertmanager not healthy"
-	@ansible monitoring_servers -m uri -a "url=http://localhost:8080/healthz" --become || echo "cAdvisor not healthy"
 	@echo "Checking Grafana Alloy health on client hosts..."
 	@ansible client_hosts -m uri -a "url=http://localhost:12345/-/ready" --become || echo "Grafana Alloy not healthy"
 
@@ -150,7 +145,6 @@ monitoring-update:
 	ansible-playbook playbooks/deploy-grafana.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 	ansible-playbook playbooks/deploy-loki.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 	ansible-playbook playbooks/deploy-alertmanager.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
-	ansible-playbook playbooks/deploy-cadvisor.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 	ansible-playbook playbooks/deploy-grafana-alloy.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 	ansible-playbook playbooks/deploy-monitoring-scripts.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 
@@ -172,8 +166,7 @@ restart-loki:
 restart-alertmanager:
 	ansible monitoring_servers -m shell -a "cd /opt/monitoring/alertmanager && docker compose restart" --become
 
-restart-cadvisor:
-	ansible monitoring_servers -m shell -a "cd /opt/monitoring/cadvisor && docker compose restart" --become
+
 
 restart-grafana-alloy:
 	ansible client_hosts -m shell -a "systemctl restart alloy" --become
@@ -240,7 +233,6 @@ deploy-full-stack:
 	ansible-playbook playbooks/deploy-grafana.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 	ansible-playbook playbooks/deploy-loki.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 	ansible-playbook playbooks/deploy-alertmanager.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
-	ansible-playbook playbooks/deploy-cadvisor.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")
 	@echo "=============================================="
 	@echo "2. Deploying Grafana Alloy (unified metrics and logs collection)..."
 	ansible-playbook playbooks/deploy-grafana-alloy.yml $(ANSIBLE_ARGS) $(if $(EXTRA_VARS),-e "$(EXTRA_VARS)")

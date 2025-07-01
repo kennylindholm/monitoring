@@ -1,16 +1,15 @@
 # Monitoring Infrastructure Inventory
 
 [monitoring_servers]
-monitoring ansible_host=192.168.122.181 ansible_user=root
+monitoring ansible_host=debian12-monitoring ansible_user=root
 
 [client_hosts]
-monitoring ansible_host=192.168.122.181 ansible_user=root
-#app1 ansible_host=192.168.122.31 ansible_user=root
-#app2 ansible_host=192.168.122.32 ansible_user=root
-#app3 ansible_host=192.168.122.33 ansible_user=root
+monitoring ansible_host=debian12-monitoring ansible_user=root
+app1 ansible_host=debian12-app1 ansible_user=root
+app2 ansible_host=debian12-app2 ansible_user=root
 
 [docker_hosts]
-monitoring ansible_host=192.168.122.181 ansible_user=root
+monitoring ansible_host=debian12-monitoring ansible_user=root
 
 [all:vars]
 ansible_ssh_private_key_file=~/.ssh/id_ed25519
